@@ -51,7 +51,7 @@ They evaluated their methods on the Stackexchange Cooking Q&A community. For eac
 
 * they also do real Movielens data (with genders for users and genres as item groups)
 
-* own idea: by adding the fairness penalty we also introduce information about group identity to the optimisation process. how does it compare if we give that information explicitly to the classifier. e.g. as group based bias or something like that. 
+* own idea: by adding the fairness penalty we also introduce information about group identity to the optimisation process. how does it compare if we give that information explicitly to the classifier. e.g. append to each user/item a 20 dimensional learned vector based on the group (i.e. for each group there is one learned vector). As the group belonging determines the rating (up to noise that is independent of the individual) this essentially reduces the problem to a 4x3 matrix. I am guessing doing this would result in best MSE and Fairness scores
 
 
 
