@@ -31,6 +31,9 @@ First, they construct the list of features extraction user-features (answer repu
 They evaluated their methods on the Stackexchange Cooking Q&A community. For each user at each time t, they considered all open and available questions as possible candidates for users to select to answer, which was 328 questions per user per time. The random forest performed best, achieving a MRR= 0.446 meaning that selected questions are found on average in the 2nd or 3rd position. They further analyzed which features were most important and found that question features seem most informative, followed by user features. They also individual features by dropping them one by one and computing the accuracy of the random forest. Referal count of the question, question reputation and number of answers were ranked highest. Restricting the features to a subset containing the ones that were highest ranked they could improve the overall accuracy, indication that feature selection can increase performance and reduce computational effort at the same time. 
 
 # Fairness
+## ACM 2017 New Fairness Measures
+same as NIPS 2017 Beyond Parity
+
 ## NIPS 2017 Beyond Parity
 * collaborative filtering framework (i.e. you have a partially observed matrix with users x items and each cell contains a rating [1..5] or unkown)
 * usual assumption is that it is random which values are missing. they argue that missing values follow a non-random pattern which is a potential source of unfairness 
