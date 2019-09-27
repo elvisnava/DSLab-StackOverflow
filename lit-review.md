@@ -56,7 +56,20 @@ same as NIPS 2017 Beyond Parity
 
 * own idea: by adding the fairness penalty we also introduce information about group identity to the optimisation process. how does it compare if we give that information explicitly to the classifier. e.g. append to each user/item a 20 dimensional learned vector based on the group (i.e. for each group there is one learned vector). As the group belonging determines the rating (up to noise that is independent of the individual) this essentially reduces the problem to a 4x3 matrix. I am guessing doing this would result in best MSE and Fairness scores
 
-
+## FA'IR: A Fair Top-k Ranking Algorithm
+* affermative action type representation in a ranking algorithm. i.e. Frauenquote
+* **input**
+    * a set of individuals; each has a binary attribute wether it belongs to a protected group and a quality-score (e.g. GPA)
+    * p in [0,1] the desired fraction of 'protected' people (like a quota)
+    * significance level alpha
+* **output**
+    * a ranking where in each prefix of the ranking. (e.g. top 10, top 40, top 100) the fraction of protected people is not statistically significantly less then p. That is under H0 (in each place of ranking you throw a p-biased coin wether that person is protected or not) the probability to see a this unfair ranking is > alpha => we can't reject H0 and claim that it is unfair
+    * they take care of multiple comparrisons ()
+* **algorithm**
+    * devide population into protected group and non protected group
+    * sort in each group by quality-score => 2 queues
+    * compute for each position how many protected individuals have to be until there at least to barely not jet reject H0
+    * if you have to few protect people you add from that que, otherwise you add best from both queues
 
 
 
@@ -71,3 +84,5 @@ same as NIPS 2017 Beyond Parity
     * **underestimation unfairness** checks in each group how much the model underestimates (i.e. cutoff if model overestimates) and computes difference. 
     * **overestimation unfairness** difference in ammount by which the model overestimates (cutoff if it underestimates)
     * **non-parity** difference in average prediction between groups
+* cited in FA'IR
+    * diversity: in top-k ranking you might also want to maximise the dissimilarity between items (not only fairness issue)
