@@ -5,7 +5,7 @@
 ## CIKM 2010 - Expert Identification in Community Question Answering
 The contribution consists of using a simple bias-based model to identify experts in the TurboTax community. Labels for experts are manually assigned by TurboTax moderators.
 
-The bias consists in wether a user tends to answer questions with a "low score", meaning questions with no existing answers or poor quality existing answers. The obtained model is compared with a simple text-based classification model and one based on a simple "Z-score".The bias model obtains very bad precision but very good recall. Combining it with the "Z-score" yields the best F1 score.
+The bias consists in whether a user tends to answer questions with a "low score", meaning questions with no existing answers or poor quality existing answers. The obtained model is compared with a simple text-based classification model and one based on a simple "Z-score".The bias model obtains very bad precision but very good recall. Combining it with the "Z-score" yields the best F1 score.
 
 The bias model can be modified to obtain higher precision (without affecting recall) by only considering users with more than N answers (however it can be seen from the graph that also the "random" classifier increases its precision in the same fashion, so it's not really about biases inherent in low volume users, rather than the fact that N is a proxy for being an expert). A better way of improving the model is by only considering the first month of answers of each user. This increases both accuracy and recall, and makes the Gaussian Model stand out as the most accurate.
 
@@ -38,6 +38,16 @@ To identify user topical expertise, the authors first train a tagword topic mode
 
 TTM uses tag-word combinations and aggregates them at the corpus level, to overcome the data sparsity problem caused by short questions which makes alternatives like LDA perform poorly. The latent distributions on topics, tags and words are learned using Gibbs sampling. Later, topic distributions are inferred for the single documents. COUPE profiles every user by comparing their answer to a question to those of other users, and constructing counts of "wins", "ties" and "losses". Then, given a new question, the counts for previous questions are reshaped using topic similarity to the current question, and aggregated with simple descriptive statistics.
 
+## IEEE 2015 - Who Will Answer my Question on StackOverflow?
+
+The paper aims to predict whether a certain user will answer a certain question, using a feature-based prediction approach and a social network based prediction approach.
+
+The feature-based approach uses question and user features to train a Random Forest. To determine which tuples to feed the learning algorithm with, for every question it first computes a list of similar questions, and then only considers tuples of the original question with users who answered questions in the list. Beyond very simple features, question features include topic features obtained with LDA.
+
+The social network based approach consists in building a social network graph with users, and predicting candidate answering users with a local search on the graph. The edges in the social network graph have weights corresponding to the amount of communication that took place between the users, with multipliers determined by the amount of tags in common and activity time in common.
+
+The two approaches are combined by putting together the respective candidate users lists. This combined approach achieves 44% precision, 59% recall, and 49% F-measure (average across all test sets), but is not compared with any baselines.
+
 # Fairness
 ## ACM 2017 New Fairness Measures
 same as NIPS 2017 Beyond Parity
@@ -67,11 +77,11 @@ same as NIPS 2017 Beyond Parity
 ## FA'IR: A Fair Top-k Ranking Algorithm
 * affermative action type representation in a ranking algorithm. i.e. Frauenquote
 * **input**
-    * a set of individuals; each has a binary attribute wether it belongs to a protected group and a quality-score (e.g. GPA)
+    * a set of individuals; each has a binary attribute whether it belongs to a protected group and a quality-score (e.g. GPA)
     * p in [0,1] the desired fraction of 'protected' people (like a quota)
     * significance level alpha
 * **output**
-    * a ranking where in each prefix of the ranking. (e.g. top 10, top 40, top 100) the fraction of protected people is not statistically significantly less then p. That is under H0 (in each place of ranking you throw a p-biased coin wether that person is protected or not) the probability to see a this unfair ranking is > alpha => we can't reject H0 and claim that it is unfair
+    * a ranking where in each prefix of the ranking. (e.g. top 10, top 40, top 100) the fraction of protected people is not statistically significantly less then p. That is under H0 (in each place of ranking you throw a p-biased coin whether that person is protected or not) the probability to see a this unfair ranking is > alpha => we can't reject H0 and claim that it is unfair
     * they take care of multiple comparrisons ()
 * **algorithm**
     * devide population into protected group and non protected group
