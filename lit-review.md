@@ -2,7 +2,7 @@
 
 # CQA
 
-## 2010 - Expert Identification in Community Question Answering
+## CIKM 2010 - Expert Identification in Community Question Answering
 The contribution consists of using a simple bias-based model to identify experts in the TurboTax community. Labels for experts are manually assigned by TurboTax moderators.
 
 The bias consists in wether a user tends to answer questions with a "low score", meaning questions with no existing answers or poor quality existing answers. The obtained model is compared with a simple text-based classification model and one based on a simple "Z-score".The bias model obtains very bad precision but very good recall. Combining it with the "Z-score" yields the best F1 score.
@@ -11,7 +11,7 @@ The bias model can be modified to obtain higher precision (without affecting rec
 
 Lastly, the authors divide the data in 5 time slots and obtain the same conclusions for each, meaning that there probably were no outside influences generating this kind of bias phenomenon, but it remained stable during the lifetime of the website.
 
-## 2012 - Finding Expert Users in Community Question Answering
+## WWW 2012 - Finding Expert Users in Community Question Answering
 The paper focuses on using topic modeling (LDA and STM) to build user profiles and identify the best experts for answering new questions.
 
 User interests can be inferred with word-based methods and topic models. A standard word-based method is TF-IDF, a measure for the importance of a word in a document based on the frequency of the word in the document and the inverse proportion of all documents containing the word. Given a question and a user (her post history), the recommendation score is obtained using the Cosine Similarity of the tf-idf scores over all the words in the question and post history. Another word-based method is *Language Model*, which uses a multinomial probability distribution over words to represent a user, avoiding zero probabilities with Dirichlet smoothing.
@@ -28,7 +28,15 @@ The authors aim to rank the questions by how likely they are to be chosen by a u
 
 First, they construct the list of features extraction user-features (answer reputation, number of posts etc), question (question age, readability scores, number of words etc)- and thread-features (answers that are already there). They train and evaluate three different approaches to predict the question that the user decided to answer, namely Random Forests as a pointwise method, LambdaRank as a pairwise approach, and ListNet for a listwise method.
 
-They evaluated their methods on the Stackexchange Cooking Q&A community. For each user at each time t, they considered all open and available questions as possible candidates for users to select to answer, which was 328 questions per user per time. The random forest performed best, achieving a MRR= 0.446 meaning that selected questions are found on average in the 2nd or 3rd position. They further analyzed which features were most important and found that question features seem most informative, followed by user features. They also individual features by dropping them one by one and computing the accuracy of the random forest. Referal count of the question, question reputation and number of answers were ranked highest. Restricting the features to a subset containing the ones that were highest ranked they could improve the overall accuracy, indication that feature selection can increase performance and reduce computational effort at the same time. 
+They evaluated their methods on the Stackexchange Cooking Q&A community. For each user at each time t, they considered all open and available questions as possible candidates for users to select to answer, which was 328 questions per user per time. The random forest performed best, achieving a MRR= 0.446 meaning that selected questions are found on average in the 2nd or 3rd position. They further analyzed which features were most important and found that question features seem most informative, followed by user features. They also individual features by dropping them one by one and computing the accuracy of the random forest. Referal count of the question, question reputation and number of answers were ranked highest. Restricting the features to a subset containing the ones that were highest ranked they could improve the overall accuracy, indication that feature selection can increase performance and reduce computational effort at the same time.
+
+## IEEE 2015 - Exploiting User Feedback for Expert Finding in Community Question Answering <sub><sup><sub><sup>Needs better grammar proofreading</sup></sub></sup></sub>
+
+The paper formalizes expert finding as a "learning to rank" problem, and presents a listwise learning approach called ListEF. The learned ranking function computes a score for every question-user pair, each pair a feature vector, and the outcome is evaluated by the corresponding answer score from the training data with a listwise loss function.
+
+To identify user topical expertise, the authors first train a tagword topic model (TTM) to extract topics from questions, and then extract user expertise features by a COmpetition-based User exPertise Extraction (COUPE) method. At last, the ranking function is learned with user expertise features using LambdaMART.
+
+TTM uses tag-word combinations and aggregates them at the corpus level, to overcome the data sparsity problem caused by short questions which makes alternatives like LDA perform poorly. The latent distributions on topics, tags and words are learned using Gibbs sampling. Later, topic distributions are inferred for the single documents. COUPE profiles every user by comparing their answer to a question to those of other users, and constructing counts of "wins", "ties" and "losses". Then, given a new question, the counts for previous questions are reshaped using topic similarity to the current question, and aggregated with simple descriptive statistics.
 
 # Fairness
 ## ACM 2017 New Fairness Measures
@@ -36,7 +44,7 @@ same as NIPS 2017 Beyond Parity
 
 ## NIPS 2017 Beyond Parity
 * collaborative filtering framework (i.e. you have a partially observed matrix with users x items and each cell contains a rating [1..5] or unkown)
-* usual assumption is that it is random which values are missing. they argue that missing values follow a non-random pattern which is a potential source of unfairness 
+* usual assumption is that it is random which values are missing. they argue that missing values follow a non-random pattern which is a potential source of unfairness
 * they use a Recomender System for Uni courses as an example and point out that there is a gender imbalance in STEM fields. there are two forms of underrepresentation:
     * **population imbalance** i.e. there are men (M) and Women (W) and they either succeed in Stem (S) or not (N). this defines a 2x2 matrix: due to society WS < WN but MS > MN || this would reflect in Men systematically rating STEM courses higher then Women
     * **observation bias** concerned with which matrix entries are observed. i.e. due to feedback loop women are never recommended STEM courses and thus there are fewer observed entries there
@@ -78,10 +86,10 @@ same as NIPS 2017 Beyond Parity
 *  cited as realted work NIPS 2017 Beyond Parity
     * **demographic parity** e.g. binary classification hire/fire P(hire|male) = P(hire|female)
     * **equal opportunity** rougly: accuracy should be same in all groups: e.g. P(hire| male, actual_label=hire) = P(hire | female, actual_label=hire)
-* introduced by NIPS 2017 Beyond Parity **all of these actually are also a function of the group I don't know what they do with this** 
-    * **value unfairness** eq 6. model over (or under) estimates the rating in one class while under (or over) estimating in the other class. 0 If direction of error is the same in both classes 
+* introduced by NIPS 2017 Beyond Parity **all of these actually are also a function of the group I don't know what they do with this**
+    * **value unfairness** eq 6. model over (or under) estimates the rating in one class while under (or over) estimating in the other class. 0 If direction of error is the same in both classes
     * **absolute unfairness** eq 8. how different the absolut error is in the two classes. does not care about direction. i.e. overestimating by 0.5 in group A and overest. by 1 in group B is the same as overestimating by 0.5 in A and understimating by 1 in group B
-    * **underestimation unfairness** checks in each group how much the model underestimates (i.e. cutoff if model overestimates) and computes difference. 
+    * **underestimation unfairness** checks in each group how much the model underestimates (i.e. cutoff if model overestimates) and computes difference.
     * **overestimation unfairness** difference in ammount by which the model overestimates (cutoff if it underestimates)
     * **non-parity** difference in average prediction between groups
 * cited in FA'IR
