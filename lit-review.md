@@ -104,3 +104,28 @@ same as NIPS 2017 Beyond Parity
     * **non-parity** difference in average prediction between groups
 * cited in FA'IR
     * diversity: in top-k ranking you might also want to maximise the dissimilarity between items (not only fairness issue)
+
+
+## Fairness in Algorithmic Decision-Making: Applications in Multi-Winner Voting, Machine Learning, and Recommender Systems 
+
+The paper provides an overview of fairness research in three domains: multi-winner voting, machine learning, and recommender systems. I just read the recommender system part. They also differ between fairness types, which is:
+
+* Equalized Odds: Given the true outcome of a variable Y, and the group of a user A, the probability of prediction Y' is different - then unfair
+* Equal opportunity: Given that Y=1 and same as above
+* Statistical parity: Most simple case: Fair is that the probability for each class is the same for different groups
+* Counterfactual Fairness: Same probabilities taking into account a context X
+* Fairness through awareness: Algorithm is fair if it gives similar predictions for similar individuals (similarity metric)
+* Individual Fairness: Define distance metric D, then D(predictions of individual A, predictions of individual B) should be smaller equal than D(individual A, individual B)
+
+
+The also differ between different types of biases:
+* Popularity bias: Favor of recommendation algorithms for popular items over items that may only be popular in small groups
+* Observation bias: item displayed by the recommender system gets further reinforced in the choice by the agent over the period of time, leading to the increase in probability for the item to be retained in the system
+* Systematic bias: biases that come from imbalance in the data are caused when a systematic bias is present in the data/ experience due to societal or historical features
+
+Last, the research also differs between 
+* User& Group fairness
+* Item fairness: item fairness should ensure that the various (past) areas of interest of a user need to be reflected with their corresponding proportions when making current recommendation
+* Multiple stakeholder fairness: While traditional recommender systems focused specifically towards satisfaction of consumer by providing a set of relevant content, these multi-sided recommender systems face the problem of additionally optimizing preferences for providers as well as for platform. Fairness requires multiple parties to gain or lose equally with respect to the recommendations made.
+
+The paper is a literature review talking about a lot of different approaches for each type. We might be able to get some inspiration when we try to reduce bias in the last part of the project, but for now it's hard to summarize.
