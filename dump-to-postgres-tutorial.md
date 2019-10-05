@@ -32,3 +32,19 @@
   `python3 load_into_pg.py -t Votes -f Votes.xml -d crossvalidated`  
   `python3 load_into_pg.py -t Badges -f Badges.xml -d crossvalidated`  
   `psql -d crossvalidated < ./sql/final_post.sql`
+
+# Make the Postgres db accessible from localhost without a password
+
+1. Find where the `pg_hba.conf` file is by running  
+  `psql -d postgres -c 'SHOW hba_file;'`
+
+2. Edit the `pg_hba.conf` file by writing `trust` instead of `md5` in lines  
+  `# IPv4 local connections:`  
+  `host    all             all             127.0.0.1/32            md5`  
+  `# IPv6 local connections:`  
+  `host    all             all             ::1/128                 md5`
+
+3. Restart the postgres service  
+  `sudo service postgresql restart`
+
+4. Use the address `'postgresql://localhost/crossvalidated'` with sqlalchemy
