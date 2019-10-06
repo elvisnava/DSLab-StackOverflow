@@ -11,6 +11,8 @@ The bias model can be modified to obtain higher precision (without affecting rec
 
 Lastly, the authors divide the data in 5 time slots and obtain the same conclusions for each, meaning that there probably were no outside influences generating this kind of bias phenomenon, but it remained stable during the lifetime of the website.
 
+**metric** they have a binary classification problem with labeled experts, => precission, recall, F1 etc.
+
 ## WWW 2012 - Finding Expert Users in Community Question Answering
 The paper focuses on using topic modeling (LDA and STM) to build user profiles and identify the best experts for answering new questions.
 
@@ -22,6 +24,8 @@ Segmented Topic Model (STM) is a topic model that discovers the hierarchical str
 
 The approaches are trained on a subset of a StackOverflow dump and evaluated using "success at N" (S@N), meaning that a prediction is considered successful if the model could find the actual best answerer of a question among the top N predicted users. Topic models exhibit much better performance than word-based approaches, and STM performs better than LDA, also extracting more meaningful topics.
 
+**metric:** Success at N. See if actuall answerer is in the top N predicted candidates => counts as reciprocal rank (e.g. actual answer was predicted as 3rd out of ten= 7/10) otherwise 0 => average
+
 ## ACM_2015_Predicting Answering Behaviour in Online Question Answering Communities
 
 The authors aim to rank the questions by how likely they are to be chosen by a user to anwer it. In contrast to other methods, they include loads of features in their model including detailed information about the question, the user and the whole thread.
@@ -29,6 +33,10 @@ The authors aim to rank the questions by how likely they are to be chosen by a u
 First, they construct the list of features extraction user-features (answer reputation, number of posts etc), question (question age, readability scores, number of words etc)- and thread-features (answers that are already there). They train and evaluate three different approaches to predict the question that the user decided to answer, namely Random Forests as a pointwise method, LambdaRank as a pairwise approach, and ListNet for a listwise method.
 
 They evaluated their methods on the Stackexchange Cooking Q&A community. For each user at each time t, they considered all open and available questions as possible candidates for users to select to answer, which was 328 questions per user per time. The random forest performed best, achieving a MRR= 0.446 meaning that selected questions are found on average in the 2nd or 3rd position. They further analyzed which features were most important and found that question features seem most informative, followed by user features. They also individual features by dropping them one by one and computing the accuracy of the random forest. Referal count of the question, question reputation and number of answers were ranked highest. Restricting the features to a subset containing the ones that were highest ranked they could improve the overall accuracy, indication that feature selection can increase performance and reduce computational effort at the same time.
+
+**metrics**
+* MAP@n 
+* Precision @ n 
 
 ## IEEE 2015 - Exploiting User Feedback for Expert Finding in Community Question Answering <sub><sup><sub><sup>Needs better grammar proofreading</sup></sub></sup></sub>
 
@@ -38,7 +46,10 @@ To identify user topical expertise, the authors first train a tagword topic mode
 
 TTM uses tag-word combinations and aggregates them at the corpus level, to overcome the data sparsity problem caused by short questions which makes alternatives like LDA perform poorly. The latent distributions on topics, tags and words are learned using Gibbs sampling. Later, topic distributions are inferred for the single documents. COUPE profiles every user by comparing their answer to a question to those of other users, and constructing counts of "wins", "ties" and "losses". Then, given a new question, the counts for previous questions are reshaped using topic similarity to the current question, and aggregated with simple descriptive statistics.
 
+**metric** Given all people that answered a particular question, they just try to predict the ranking of those answers. They use NDCG@k as loss, which measures 'how much the predicted ranking has a different order'
+
 ## IEEE 2015 - Who Will Answer my Question on StackOverflow?
+
 
 The paper aims to predict whether a certain user will answer a certain question, using a feature-based prediction approach and a social network based prediction approach.
 
