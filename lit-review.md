@@ -59,6 +59,15 @@ The social network based approach consists in building a social network graph wi
 
 The two approaches are combined by putting together the respective candidate users lists. This combined approach achieves 44% precision, 59% recall, and 49% F-measure (average across all test sets), but is not compared with any baselines.
 
+## SAN Routing Questions for Collaborative Answering in Community Question Answering
+
+They also try to route questions to answerers, but in contrast to others, they route the question to "a group of answerers who would be willing to collaborate". Their motivation is that they investigated how the number of view of a thread is correlated with the number of answers, answer score and number of comments within the first hour, and how that all are statistically significant, so apperently "commenting in the early stage greatly improves the lasting value of a question".
+
+To find the group of users most compatible to answer the question, they take into account four main features: Topic expertice of a user(exp), readiness of a user to answer a topic (cmt), availability of the user in the time (avail) and compatability of user1 to user2 (compat). They describe in detail how they compute these values, most importantly, in order to extract the topics, they propose taking cosine similarity between tags and do spectral clustering to obtain topics, and they show that it performs better than using LDA on the question text to extract topics. 
+
+The overall algorithm to find a GROUP of users goes as follows: They iteratively add users to the set, each time using the user with the maximum score when multiplying their feature scores (avail*exp*compat) for the group of answerers, and (avail*cmt*compat) fot predicting a group of commenters. They compare it to some baselines using MRR and so on.
+ 
+
 # Fairness
 ## ACM 2017 New Fairness Measures
 same as NIPS 2017 Beyond Parity
