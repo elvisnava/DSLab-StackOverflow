@@ -59,7 +59,7 @@ The social network based approach consists in building a social network graph wi
 
 The two approaches are combined by putting together the respective candidate users lists. This combined approach achieves 44% precision, 59% recall, and 49% F-measure (average across all test sets), but is not compared with any baselines.
 
-## SAN Routing Questions for Collaborative Answering in Community Question Answering
+## SAN 2013 - Routing Questions for Collaborative Answering in Community Question Answering
 
 They also try to route questions to answerers, but in contrast to others, they route the question to "a group of answerers who would be willing to collaborate". Their motivation is that they investigated how the number of view of a thread is correlated with the number of answers, answer score and number of comments within the first hour, and how that all are statistically significant, so apperently "commenting in the early stage greatly improves the lasting value of a question".
 
