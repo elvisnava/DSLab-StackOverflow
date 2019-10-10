@@ -67,6 +67,12 @@ To find the group of users most compatible to answer the question, they take int
 
 The overall algorithm to find a GROUP of users goes as follows: They iteratively add users to the set, each time using the user with the maximum score when multiplying their feature scores (avail*exp*compat) for the group of answerers, and (avail*cmt*compat) fot predicting a group of commenters. They compare it to some baselines using MRR and so on.
 
+## RecSys 2014 - Question Recommendation for Collaborative Question Answering Systems with RankSLDA
+
+The author propose an algorithm called *RankSLDA* (Supervised LDA) to model the pairwise order of expertise of users with respect to a given question. This model simply extends the pre-existing *sLDA*, whose goal is to find the latent topics that best explain the observed responses, and does so by including in the LDA generative model the response variables y, which depend on the latent topic assignments z. The fitting is done with Gibbs sampling as usual, and then the obtained topic assignments z are used to train regression parameters for user topical expertise (to predict question answering scores) using logistic regression with l2 regularization.
+
+The model is compared with baselines including LDA + Ranking (same as RankSLDA but without the supervised factor in Gibbs sampling) using basically all metrics such as P@N, nDCG@N (discounted cumulative gain), MAP, MRR. It's slightly better than LDA + Ranking, and much better than very simple baselines.
+
 
 # Fairness
 ## ACM 2017 New Fairness Measures
