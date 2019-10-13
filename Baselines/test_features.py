@@ -15,6 +15,14 @@ class Test_Features(unittest.TestCase):
 
         ldaFeatures.fit(questions)
 
+    def test_clean_html(self):
+        html_clean = features.RemoveHtmlTags()
+
+        questions = self.data.query("Select Body from Posts WHERE PostTypeId=2")
+
+        cleaned = html_clean.fit_transform(questions.body)
+        pass
+
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
+import re
 
 class AppendArgmax(BaseEstimator, TransformerMixin):
 
@@ -13,6 +14,22 @@ class AppendArgmax(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         max_ids = np.argmax(X, axis=1)
         return np.concatenate([X, max_ids[:, np.newaxis]], axis=1)
+
+
+class RemoveHtmlTags(BaseEstimator, TransformerMixin):
+    @staticmethod
+    def clean_html(raw_html):
+        cleantext = re.sub(r'<.*?>', '', raw_html)
+        return cleantext
+
+    def __init__(self):
+        self.clean_f = np.vectorize(RemoveHtmlTags.clean_html)
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        return self.clean_f(X)
 
 
 # class Feature:

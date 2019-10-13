@@ -9,17 +9,19 @@ import re
 
 from data import Data
 from features import AppendArgmax
+import features
 import utils
 
 data = Data()
 
 data.set_time_range(start=date(year=2012, month=5, day=3), end=date(year=2014, month=1, day=1))
 
-questions = data.get_questions()
+questions = data.query("SELECT * FROM Posts WHERE PostTypeID = {}".format(data.questionPostType))
 
 lda_pipeline = ColumnTransformer([
     ('body2lda',
      Pipeline([ ## start text pipline
+         ("remove_html", features.RemoveHtmlTags()),
         ("vectorize", CountVectorizer(stop_words='english', preprocessor=lambda x: re.sub(r'(\d[\.]?)+', '#N', x.lower()))),
         ("lda",  LDA(n_topics=10, n_iter=1000)),
          ("append_argmax", AppendArgmax())
