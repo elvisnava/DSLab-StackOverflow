@@ -28,15 +28,15 @@ The approaches are trained on a subset of a StackOverflow dump and evaluated usi
 
 ## ACM_2015_Predicting Answering Behaviour in Online Question Answering Communities
 
-The authors aim to rank the questions by how likely they are to be chosen by a user to anwer it. In contrast to other methods, they include loads of features in their model including detailed information about the question, the user and the whole thread.
+The authors aim to rank the questions by how likely they are to be chosen by a user to answer it. In contrast to other methods, they include loads of features in their model including detailed information about the question, the user and the whole thread.
 
 First, they construct the list of features extraction user-features (answer reputation, number of posts etc), question (question age, readability scores, number of words etc)- and thread-features (answers that are already there). They train and evaluate three different approaches to predict the question that the user decided to answer, namely Random Forests as a pointwise method, LambdaRank as a pairwise approach, and ListNet for a listwise method.
 
 They evaluated their methods on the Stackexchange Cooking Q&A community. For each user at each time t, they considered all open and available questions as possible candidates for users to select to answer, which was 328 questions per user per time. The random forest performed best, achieving a MRR= 0.446 meaning that selected questions are found on average in the 2nd or 3rd position. They further analyzed which features were most important and found that question features seem most informative, followed by user features. They also individual features by dropping them one by one and computing the accuracy of the random forest. Referal count of the question, question reputation and number of answers were ranked highest. Restricting the features to a subset containing the ones that were highest ranked they could improve the overall accuracy, indication that feature selection can increase performance and reduce computational effort at the same time.
 
 **metrics**
-* MAP@n 
-* Precision @ n 
+* MAP@n
+* Precision @ n
 
 ## IEEE 2015 - Exploiting User Feedback for Expert Finding in Community Question Answering <sub><sup><sub><sup>Needs better grammar proofreading</sup></sub></sup></sub>
 
@@ -58,6 +58,21 @@ The feature-based approach uses question and user features to train a Random For
 The social network based approach consists in building a social network graph with users, and predicting candidate answering users with a local search on the graph. The edges in the social network graph have weights corresponding to the amount of communication that took place between the users, with multipliers determined by the amount of tags in common and activity time in common.
 
 The two approaches are combined by putting together the respective candidate users lists. This combined approach achieves 44% precision, 59% recall, and 49% F-measure (average across all test sets), but is not compared with any baselines.
+
+## SAN 2013 - Routing Questions for Collaborative Answering in Community Question Answering
+
+They also try to route questions to answerers, but in contrast to others, they route the question to "a group of answerers who would be willing to collaborate". Their motivation is that they investigated how the number of view of a thread is correlated with the number of answers, answer score and number of comments within the first hour, and how that all are statistically significant, so apperently "commenting in the early stage greatly improves the lasting value of a question".
+
+To find the group of users most compatible to answer the question, they take into account four main features: Topic expertice of a user(exp), readiness of a user to answer a topic (cmt), availability of the user in the time (avail) and compatability of user1 to user2 (compat). They describe in detail how they compute these values, most importantly, in order to extract the topics, they propose taking cosine similarity between tags and do spectral clustering to obtain topics, and they show that it performs better than using LDA on the question text to extract topics.
+
+The overall algorithm to find a GROUP of users goes as follows: They iteratively add users to the set, each time using the user with the maximum score when multiplying their feature scores (avail*exp*compat) for the group of answerers, and (avail*cmt*compat) fot predicting a group of commenters. They compare it to some baselines using MRR and so on.
+
+## RecSys 2014 - Question Recommendation for Collaborative Question Answering Systems with RankSLDA
+
+The author propose an algorithm called *RankSLDA* (Supervised LDA) to model the pairwise order of expertise of users with respect to a given question. This model simply extends the pre-existing *sLDA*, whose goal is to find the latent topics that best explain the observed responses, and does so by including in the LDA generative model the response variables y, which depend on the latent topic assignments z. The fitting is done with Gibbs sampling as usual, and then the obtained topic assignments z are used to train regression parameters for user topical expertise (to predict question answering scores) using logistic regression with l2 regularization.
+
+The model is compared with baselines including LDA + Ranking (same as RankSLDA but without the supervised factor in Gibbs sampling) using basically all metrics such as P@N, nDCG@N (discounted cumulative gain), MAP, MRR. It's slightly better than LDA + Ranking, and much better than very simple baselines.
+
 
 # Fairness
 ## ACM 2017 New Fairness Measures
@@ -117,7 +132,7 @@ same as NIPS 2017 Beyond Parity
     * diversity: in top-k ranking you might also want to maximise the dissimilarity between items (not only fairness issue)
 
 
-## Fairness in Algorithmic Decision-Making: Applications in Multi-Winner Voting, Machine Learning, and Recommender Systems 
+## Fairness in Algorithmic Decision-Making: Applications in Multi-Winner Voting, Machine Learning, and Recommender Systems
 
 The paper provides an overview of fairness research in three domains: multi-winner voting, machine learning, and recommender systems. I just read the recommender system part. They also differ between fairness types, which is:
 
@@ -134,7 +149,7 @@ The also differ between different types of biases:
 * Observation bias: item displayed by the recommender system gets further reinforced in the choice by the agent over the period of time, leading to the increase in probability for the item to be retained in the system
 * Systematic bias: biases that come from imbalance in the data are caused when a systematic bias is present in the data/ experience due to societal or historical features
 
-Last, the research also differs between 
+Last, the research also differs between
 * User& Group fairness
 * Item fairness: item fairness should ensure that the various (past) areas of interest of a user need to be reflected with their corresponding proportions when making current recommendation
 * Multiple stakeholder fairness: While traditional recommender systems focused specifically towards satisfaction of consumer by providing a set of relevant content, these multi-sided recommender systems face the problem of additionally optimizing preferences for providers as well as for platform. Fairness requires multiple parties to gain or lose equally with respect to the recommendations made.

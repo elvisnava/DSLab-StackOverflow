@@ -5,6 +5,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from lda import LDA
 
 from datetime import date
+import re
 
 from data import Data
 from features import AppendArgmax
@@ -19,8 +20,8 @@ questions = data.get_questions()
 lda_pipeline = ColumnTransformer([
     ('body2lda',
      Pipeline([ ## start text pipline
-        ("vectorize", CountVectorizer()),
-        ("lda",  LDA(n_topics=10, n_iter=10000)),
+        ("vectorize", CountVectorizer(stop_words='english', preprocessor=lambda x: re.sub(r'(\d[\.]?)+', '#N', x.lower()))),
+        ("lda",  LDA(n_topics=10, n_iter=1000)),
          ("append_argmax", AppendArgmax())
     ]), "body") #end text pipeline
 ])# end Column transformer

@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 import pandas as pd
+import re
 
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
@@ -34,8 +35,11 @@ class Data:
 
         return " AND ".join(conds)
 
-    def get_questions(self):
-        return self._get_questions_in_timerange(start=self.start, end=self.end)
+    def get_questions(self, clean_html = True):
+        questions = self._get_questions_in_timerange(start=self.start, end=self.end)
+        if clean_html:
+            questions['body'] = questions['body'].apply(lambda x: self._clean_html(x))
+        return questions
 
 
     def _get_questions_in_timerange(self, start=None, end=None):
@@ -50,3 +54,7 @@ class Data:
             query_string += self._time_range_condition_string(start=start, end=end)
 
         return self.query(query_string)
+
+    def _clean_html(self, raw_html):
+        cleantext = re.sub(r'<.*?>', '', raw_html)
+        return cleantext
