@@ -14,5 +14,5 @@
     * calculate user/question embedding with tf-idf, LDA, STM 
     * sort users by simiarity => could also use the other way around
 
-* ACM 2015: Who will Answer my Question on Stack Overflow? 
+* IEEE 2015: Who will Answer my Question on Stack Overflow? 
     * Technically they do ```Question -> Set[Users]```, since they binary classify `(question,user)` pairs
