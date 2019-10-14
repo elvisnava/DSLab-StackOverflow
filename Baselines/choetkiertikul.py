@@ -26,7 +26,7 @@ lda_pipeline = ColumnTransformer([
         ("lda",  LDA(n_topics=10, n_iter=1000)),
          ("append_argmax", AppendArgmax())
     ]), "body") #end text pipeline
-])# end Column transformer
+]) # end Column transformer
 
 
 out = lda_pipeline.fit_transform(questions)
