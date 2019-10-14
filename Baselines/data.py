@@ -12,7 +12,7 @@ class Data:
 
         self.cnx = create_engine(db_adress)
 
-        self.questionPostType = 1
+        self.macro_dict = dict(questionPostType=1, answerPostType=2)
 
         self.time_window_view_template = "InTimewindow_{}"
 
@@ -56,10 +56,19 @@ class Data:
         res = self.cnx.execute(command)
         return res
 
-    def query(self, query_str):
-        """Run a custom query but Posts,Users,Votes tables will be restricted to contain rows created within the time intervall set in set_time_range"""
+    def query(self, query_str, use_macros=False):
+        """
+        Run a custom query but Posts,Users,Votes tables will be restricted to contain rows created within the time intervall set in set_time_range
+
+        :param query_str:
+        :param use_macros: if True occurences of e.g. {questionPostType} will be replaced by the corresponding value in self.macro_dict
+        :return:
+        """
         if self.start is None and self.end is None:
             raise ValueError("you first have to set a timerange with set_time_range")
+
+        if use_macros:
+            query_str = query_str.format(**self.macro_dict)
 
         replaced_query = self.replace_all_tables_with_views(query_str)
         print("Replaced Query>>>>"+replaced_query)
@@ -75,8 +84,8 @@ class Data:
 
 
     def replace_tablename_by_viewname(self, tablename, query):
-        regex_str = r"([ ]?)" + tablename + r"([. \n]|$)"
-        replacement_str = r"\1" + self.time_window_view_template.format(tablename) + r"\2"
+        regex_str = r"([ \(,.=])" + tablename + r"(?=([. \n]|$))"
+        replacement_str = r"\1" + self.time_window_view_template.format(tablename)
 
         new_query = re.sub(regex_str, replacement_str,  query, flags=re.IGNORECASE)
         return new_query
@@ -98,28 +107,9 @@ class Data:
 
         return " AND ".join(conds)
 
-    def get_questions(self, clean_html = True):
+    def get_questions(self):
+        return self.query("SELECT Id, Title, Body, Tags FROM Posts WHERE PostTypeID = {}".format(self.questionPostType))
 
-        raise RuntimeWarning("Deprecated better run your custom sql query directly with data.query")
-
-        questions = self._get_questions_in_timerange(start=self.start, end=self.end)
-        if clean_html: # TODO refactor this to a transformer
-            questions['body'] = questions['body'].apply(lambda x: self._clean_html(x))
-        return questions
-
-
-    def _get_questions_in_timerange(self, start=None, end=None):
-        """
-        :param start: first allowed creation date
-        :param end: last allowed creation date
-        :return:
-        """
-        query_string = "SELECT * FROM Posts WHERE PostTypeId={postTypeId}".format(postTypeId=self.questionPostType)
-        if start or end:
-            query_string += " AND "
-            query_string += self._time_range_condition_string(start=start, end=end)
-
-        return self.query(query_string)
 
     def _clean_html(self, raw_html):
         cleantext = re.sub(r'<.*?>', '', raw_html)

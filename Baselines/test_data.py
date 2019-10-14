@@ -32,6 +32,12 @@ class Test_Data(unittest.TestCase):
         check("SELECT OwnerUserId, count(OwnerUserId) as num_solved_questions FROM Posts INNER JOIN Users ON Posts.OwnerUserId=Users.Id WHERE PostTypeId=1 AND AcceptedAnswerId IS NOT NULL GROUP BY OwnerUserId",
               "SELECT OwnerUserId, count(OwnerUserId) as num_solved_questions FROM InTimewindow_Posts INNER JOIN InTimewindow_Users ON InTimewindow_Posts.OwnerUserId=InTimewindow_Users.Id WHERE PostTypeId=1 AND AcceptedAnswerId IS NOT NULL GROUP BY OwnerUserId")
 
+        check("SELECT Id as UserId, CreationDate, Reputation, UpVotes, DownVotes from Users",
+              "SELECT Id as UserId, CreationDate, Reputation, UpVotes, DownVotes from InTimewindow_Users")
+
+        check("SELECT OwnerUserId as UserId, count(Posts.Id) from Posts where Posts.PostTypeId = 2 GROUP BY OwnerUserId",
+              "SELECT OwnerUserId as UserId, count(InTimewindow_Posts.Id) from InTimewindow_Posts where InTimewindow_Posts.PostTypeId = 2 GROUP BY OwnerUserId")
+
 
 
     def test_time_range_condition_string(self):
