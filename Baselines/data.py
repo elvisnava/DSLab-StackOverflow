@@ -5,12 +5,12 @@ import re
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
 
-    def __init__(self, db_adress = None):
+    def __init__(self, db_address = None):
 
-        if db_adress is None:
-            db_adress = 'postgresql://localhost/crossvalidated'
+        if db_address is None:
+            db_address = 'postgresql://localhost/crossvalidated'
 
-        self.cnx = create_engine(db_adress)
+        self.cnx = create_engine(db_address)
 
         self.macro_dict = dict(questionPostType=1, answerPostType=2)
 

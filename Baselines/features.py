@@ -19,22 +19,22 @@ class AppendArgmax(BaseEstimator, TransformerMixin):
 
 class ReadabilityIndexes(BaseEstimator, TransformerMixin):
     @staticmethod
-    def get_readability_meassures(text, readability_meassures):
+    def get_readability_measures(text, readability_measures):
         """
 
         :param text:
-        :param readability_meassures: a string array with the names of the meassures
+        :param readability_measures: a string array with the names of the measures
         :return:
         """
 
-        meassures = readability.getmeasures(text, lang='en')['readability grades']
+        measures = readability.getmeasures(text, lang='en')['readability grades']
 
-        out = [meassures[m_name] for m_name in readability_meassures]
+        out = [measures[m_name] for m_name in readability_measures]
 
         return out
 
-    def __init__(self, meassures_to_compute):
-        self.meassures_to_compute = meassures_to_compute
+    def __init__(self, measures_to_compute):
+        self.measures_to_compute = measures_to_compute
 
     def fit(self, X, y=None):
         return self
@@ -42,7 +42,7 @@ class ReadabilityIndexes(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         #assert(len(X.shape)==1 or X.shape[1]==1)
 
-        f = lambda text: ReadabilityIndexes.get_readability_meassures(text, self.meassures_to_compute)
+        f = lambda text: ReadabilityIndexes.get_readability_measures(text, self.measures_to_compute)
 
         result = np.array(list(map(f, X)))
         return result
@@ -183,4 +183,3 @@ class CountStringOccurences(_StatelessTransformer):
 #
 #
 #
-
