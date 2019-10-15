@@ -72,7 +72,7 @@ out = question_feature_pipeline.fit_transform_df(question_data)
 
 
 
-vec, lda_obj = utils.find_lda_and_vectorizer(lda_pipeline)
+vec, lda_obj = utils.find_lda_and_vectorizer(question_feature_pipeline)
 
 words_for_topic = utils.top_n_words_by_topic(vec, lda_obj, 10)
 for topic in words_for_topic:
