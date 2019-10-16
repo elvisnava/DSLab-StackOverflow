@@ -14,7 +14,6 @@ from features import AppendArgmax
 import features
 import utils
 import pandas as pd
-from datetime import date
 
 data = Data()
 data.set_time_range(start=date(year=2012, month=5, day=3), end=date(year=2013, month=1, day=1))
@@ -70,7 +69,7 @@ lda_pipeline = Pipeline([ ## start text pipline
     ("replace_numbers", features.ReplaceNumbers()),
     ("unpack", FunctionTransformer(np.squeeze, validate=False)), # this is necessary cause the vectorizer does not expect 2d data
     ("vectorize", CountVectorizer(stop_words='english')),
-    ("lda",  LDA(n_topics=10, n_iter=10)),
+    ("lda",  LDA(n_topics=10, n_iter=100)),
     ("append_argmax", AppendArgmax())])
 
 

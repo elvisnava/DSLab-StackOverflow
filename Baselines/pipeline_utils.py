@@ -6,7 +6,7 @@ class NamedColumnTransformer(ColumnTransformer):
         """
 
         :param transformers: a list with each element (output_columns_identifier, Pipeline, name_of_column_to_acct_on)
-            output_columns_identifier should be a comma seperated list of names for each column that is outputed by the Pipeline, but a name can be folloed by name[3] then 3 columns are named like that.
+            output_columns_identifier should be a comma seperated list of names for each column that is outputed by the Pipeline, but a name can be followed by name[3] then 3 columns are named like that.
             e.g. 'lda[4],best_topic,entropy' => would generate 6 column names: lda0, lda1, lda2, lda3, best_topic, entropy
 
         :param remainder:

@@ -7,10 +7,10 @@ class Data:
 
     def __init__(self, db_adress = None, verbose=0):
 
-        if db_adress is None:
-            db_adress = 'postgresql://localhost/crossvalidated'
+        if db_address is None:
+            db_address = 'postgresql://localhost/crossvalidated'
 
-        self.cnx = create_engine(db_adress)
+        self.cnx = create_engine(db_address)
 
         self.macro_dict = dict(questionPostType=1, answerPostType=2)
 
