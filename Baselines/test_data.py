@@ -5,7 +5,7 @@ import numpy as np
 
 class Test_Data(unittest.TestCase):
     def setUp(self):
-        self.data = data.Data()
+        self.data = data.Data(verbose=3)
         self.a = date(year=2012, month=5, day=23)
         self.b = date(year=2015, month=1, day=12)
 
@@ -39,6 +39,9 @@ class Test_Data(unittest.TestCase):
               "SELECT OwnerUserId as UserId, count(InTimewindow_Posts.Id) from InTimewindow_Posts where InTimewindow_Posts.PostTypeId = 2 GROUP BY OwnerUserId")
 
 
+    def test_temp_table_string(self):
+        s = self.data.get_temp_tables_string()
+        pass
 
     def test_time_range_condition_string(self):
         a = date(year=2012, month=5, day=23)

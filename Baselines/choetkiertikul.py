@@ -15,7 +15,7 @@ import features
 import utils
 import pandas as pd
 
-data = Data()
+data = Data(verbose=1)
 data.set_time_range(start=date(year=2012, month=5, day=3), end=date(year=2013, month=1, day=1))
 
 def get_question_data():

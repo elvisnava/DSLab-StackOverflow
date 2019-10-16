@@ -5,7 +5,7 @@ import re
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
 
-    def __init__(self, db_adress = None, verbose=0):
+    def __init__(self, db_address = None, verbose = 0):
 
         if db_address is None:
             db_address = 'postgresql://localhost/crossvalidated'
@@ -25,7 +25,6 @@ class Data:
     def set_time_range(self, start=None, end=None):
         self.start = start
         self.end = end
-        self.create_time_range_views(start, end)
 
     def drop_timewindow_views(self):
         for raw_tablename in self.table_names_that_need_timerestrictions:
@@ -35,6 +34,7 @@ class Data:
 
 
     def create_time_range_views(self, start, end):
+        raise DeprecationWarning("Dont use this")
         self.drop_timewindow_views()
 
         time_range_condition = self._time_range_condition_string(start=start, end=end)
@@ -43,6 +43,24 @@ class Data:
             viewname = self.time_window_view_template.format(raw_tablename)
             command = "CREATE VIEW {} AS SELECT * FROM {} WHERE {}".format(viewname, raw_tablename, time_range_condition)
             self.execute_command(command)
+
+    def get_temp_tables_string(self, raw_tablenames = None):
+        if raw_tablenames is None:
+            raw_tablenames = self.table_names_that_need_timerestrictions
+
+        time_range_condition = self._time_range_condition_string(start=self.start, end=self.end)
+
+        collector = list()
+        for raw_tablename in raw_tablenames:
+            viewname = self.time_window_view_template.format(raw_tablename)
+            temp_table = " {} AS (SELECT * FROM {} WHERE {})".format(viewname, raw_tablename, time_range_condition)
+            collector.append(temp_table)
+
+        all_views = "WITH " + " ,".join(collector) + " "
+
+        return all_views
+
+
 
     def get_tables(self):
         query = "SELECT * FROM pg_catalog.pg_tables WHERE schemaname='public';"
@@ -72,10 +90,17 @@ class Data:
             query_str = query_str.format(**self.macro_dict)
 
         replaced_query = self.replace_all_tables_with_views(query_str)
-        if self.verbose >= 1:
-            print("Replaced Query>>>>"+replaced_query)
 
-        return self._raw_query(replaced_query)
+        raw_tablenames_in_query = [raw_name for raw_name in self.table_names_that_need_timerestrictions
+                                   if replaced_query.find(self.time_window_view_template.format(raw_name)) != -1]
+
+        query_with_temp_tables = self.get_temp_tables_string(raw_tablenames_in_query) + replaced_query
+
+
+        if self.verbose >= 1:
+            print("Replaced Query>>>>"+ query_with_temp_tables)
+
+        return self._raw_query(query_with_temp_tables)
 
     def raw_query(self, query_str):
         if self.verbose >= 1:
