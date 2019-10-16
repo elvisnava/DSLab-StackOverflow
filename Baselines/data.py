@@ -5,7 +5,7 @@ import re
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
 
-    def __init__(self, db_adress = None):
+    def __init__(self, db_adress = None, verbose=0):
 
         if db_adress is None:
             db_adress = 'postgresql://localhost/crossvalidated'
@@ -16,10 +16,11 @@ class Data:
 
         self.time_window_view_template = "InTimewindow_{}"
 
-        self.table_names_that_need_timerestrictions = ["Posts", "Users",   "Votes"]
+        self.table_names_that_need_timerestrictions = ["Posts", "Users", "Votes"]
 
         self.start, self.end = None, None
         self.drop_timewindow_views()
+        self.verbose = verbose
 
     def set_time_range(self, start=None, end=None):
         self.start = start
@@ -71,12 +72,14 @@ class Data:
             query_str = query_str.format(**self.macro_dict)
 
         replaced_query = self.replace_all_tables_with_views(query_str)
-        print("Replaced Query>>>>"+replaced_query)
+        if self.verbose >= 1:
+            print("Replaced Query>>>>"+replaced_query)
 
         return self._raw_query(replaced_query)
 
     def raw_query(self, query_str):
-        print("WARING >> calling raw_query({}) means that data outside of the set timeperiod is also used".format(query_str))
+        if self.verbose >= 1:
+            print("WARING >> calling raw_query({}) means that data outside of the set timeperiod is also used".format(query_str))
         return self._raw_query(query_str)
 
     def _raw_query(self, query_str):

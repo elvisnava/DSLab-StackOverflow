@@ -41,6 +41,25 @@ def get_user_data(date_now):
 
     return final
 
+def get_similar_questions(source_questions, context_questions):
+    """
+    for each query question get a list of context_questions that are similar
+
+
+    return pd dataframe with source_question_ids and context_question_ids. there are gonna be multiple lines with same source_question_id
+    """
+    pass
+
+def get_users_who_answered():
+    """
+
+    :return: dataframe question_id, answerer_id all pairs where user_id answered question question_id to an acceptable standard
+    """
+    pass
+
+
+
+
 get_user_data(date(year=2020, month=1, day=1))
 
 
@@ -68,9 +87,6 @@ question_feature_pipeline = NamedColumnTransformer([
 ]) # end Column transformer
 
 out = question_feature_pipeline.fit_transform_df(question_data)
-
-
-
 
 vec, lda_obj = utils.find_lda_and_vectorizer(question_feature_pipeline)
 

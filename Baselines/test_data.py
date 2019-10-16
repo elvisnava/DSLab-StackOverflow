@@ -49,13 +49,6 @@ class Test_Data(unittest.TestCase):
         out_string2 = self.data._time_range_condition_string(end=b)
         self.assertEqual("CreationDate <= date '2015-01-12'", out_string2)
 
-    def test_get_question(self):
-        a = date(year=2012, month=5, day=23)
-        b = date(year=2015, month=1, day=12)
-
-
-        questions = self.data._get_questions_in_timerange(start=a, end=b)
-        pass
 
     def test_get_questions(self):
         qs = self.data.query("select * from Posts")
