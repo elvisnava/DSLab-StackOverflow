@@ -47,14 +47,7 @@ def get_similar_questions(source_questions, context_questions):
 
     return pd dataframe with source_question_ids and context_question_ids. there are gonna be multiple lines with same source_question_id
     """
-    pass
 
-def get_users_who_answered():
-    """
-
-    :return: dataframe question_id, answerer_id all pairs where user_id answered question question_id to an acceptable standard
-    """
-    pass
 
 
 

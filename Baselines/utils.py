@@ -88,3 +88,21 @@ def top_n_words_by_topic(vectorizer, lda_obj, n_words):
         result.append( vocab[top_n_ids[i, :]].tolist())
 
     return result
+
+def indicator_left_not_in_right(left, right, on):
+    """
+
+    :param left: dataframe
+    :param right: dataframe
+    :param on: list of strings with all the columns that should be matched
+    :return: a boolean numpy array of same length as left. its True iff the corresponding row of left DOES NOT occur anywhere in right with matching values of the columns on
+    """
+    # https://stackoverflow.com/questions/28901683/pandas-get-rows-which-are-not-in-other-dataframe
+    reduced_right = (right[on]).drop_duplicates()
+
+    reduced_left = left[on]
+
+    df_all = reduced_left.merge(reduced_right, on=on, how='left', indicator=True)
+
+    indicator = df_all._merge == 'left_only'
+    return indicator

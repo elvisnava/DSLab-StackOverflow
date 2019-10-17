@@ -61,3 +61,43 @@ class Test_Data(unittest.TestCase):
     def _check_date_in_range(self, dates):
         self.assertTrue(np.all(dates >= self.a))
         self.assertTrue(np.all(dates <= self.b))
+
+    def test_get_accepted_answer(self):
+        acept_Answers = self.data.get_accepted_answer()
+        pass
+
+    # @unittest.skip("doesnt work")
+    def test_best_answer_above_threshold(self):
+        ans = self.data.get_best_answer_above_threshold(upvotes_threshold=100)
+
+        pass
+
+    def test_get_answers(self):
+        thres = 10
+
+        acept_Answers = self.data.get_accepted_answer()
+        best_answers = self.data.get_best_answer_above_threshold(upvotes_threshold=thres)
+
+        indices_of_questions_for_which_both_esists = set(acept_Answers.index).intersection( set(best_answers.index))
+
+        idx = np.array(list(indices_of_questions_for_which_both_esists))
+
+        indices_whith_different_answers = idx[acept_Answers.answer_post_id[idx] != best_answers.answer_post_id[idx]]
+
+        combined_answers = self.data.get_answer_for_question(threshold=thres)
+
+        all_indices = np.unique(np.concatenate([acept_Answers.index , best_answers.index]))
+
+        # try if all indicces are in the combined_ansers
+        _t = combined_answers.loc[all_indices]
+        self.assertEqual(len(_t), len(combined_answers))
+
+
+        # check if the questions iwth different best and accepted answers have the accepted answers
+
+        have_accepted_answer = combined_answers.loc[indices_whith_different_answers, "answer_post_id"] == acept_Answers.loc[indices_whith_different_answers, "answer_post_id"]
+        self.assertTrue(np.all(have_accepted_answer))
+
+        have_best_answer = combined_answers.loc[indices_whith_different_answers, "answer_post_id"] == best_answers.loc[indices_whith_different_answers, "answer_post_id"]
+        self.assertTrue(np.count_nonzero(have_best_answer)==0)
+        pass
