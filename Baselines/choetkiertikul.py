@@ -47,7 +47,6 @@ def get_similar_questions(source_questions, context_questions):
 
     return pd dataframe with source_question_ids and context_question_ids. there are gonna be multiple lines with same source_question_id
     """
-    pass
 
 
 
