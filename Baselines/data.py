@@ -16,11 +16,13 @@ class Data:
 
         self.time_window_view_template = "InTimewindow_{}"
 
+        self.verbose = verbose
+
         self.table_names_that_need_timerestrictions = ["Posts", "Users", "Votes"]
 
         self.start, self.end = None, None
         self.drop_timewindow_views()
-        self.verbose = verbose
+        self.create_date_indices()
 
     def set_time_range(self, start=None, end=None):
         self.start = start
@@ -134,6 +136,15 @@ class Data:
             conds.append("{} <= date '{}'".format(time_variable_name, end))
 
         return " AND ".join(conds)
+
+    def create_date_indices(self, time_variable_name="CreationDate"):
+
+        for tablename in self.table_names_that_need_timerestrictions:
+
+            index_name = "idx_creationdate_{}".format(tablename)
+            command = "CREATE INDEX IF NOT EXISTS {name} ON {table} using btree({varname})".format(name=index_name, table=tablename, varname=time_variable_name)
+
+            self.execute_command(command)
 
     def get_questions(self):
         return self.query("SELECT Id, Title, Body, Tags FROM Posts WHERE PostTypeID = {}".format(self.questionPostType))
