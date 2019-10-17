@@ -142,3 +142,50 @@ class Data:
     def _clean_html(self, raw_html):
         cleantext = re.sub(r'<.*?>', '', raw_html)
         return cleantext
+
+
+    def get_answer_for_question(self, threshold):
+        """
+        :return: dataframe question_id (index), answerer_id, answer_post_id, score || all pairs where user anwerer_id answered question question_id to an acceptable standard.
+        there is at most one answerer per question it is the accepted answer if it exists or the answer with the hightest score above the given threshold.
+        Note that the index of the returned dataframe corresponds to the question_id
+        """
+        accepted_answers = self.get_accepted_answer()
+        best_answers = self.get_best_answer_above_threshold(threshold)
+
+        filtered_best_answers = best_answers.drop(index=accepted_answers.index, errors="ignore") # forget all best answers for questions where an accepted answer exists
+
+        result = pd.concat([accepted_answers, filtered_best_answers], verify_integrity=True)
+        return result
+
+    def get_best_answer_above_threshold(self, upvotes_threshold):
+        """
+        :return: dataframe question_id, answerer_id, answer_post_id with the answer with the most number of upvotes as long as it is above the given threshold. Doesn't care whether answer is accepted or not
+        """
+        # this query results in an endless loop I don't know why:
+        #
+        # q = """SELECT Q.Id as question_id, A.OwnerUserId as answerer_id, A.Id AS answer_post_id
+        #     FROM (SELECT Id FROM Posts WHERE PostTypeId = {{questionPostType}} AND AcceptedAnswerId IS NULL) AS Q
+        #         INNER JOIN
+        #     (SELECT Id, OwnerUserId, Score, ParentId FROM Posts WHERE PostTypeId = {{answerPostType}} AND Score >= {threshold} AND OwnerUserId IS NOT NULL) AS A
+        #     ON A.ParentId = Q.Id
+        #     ORDER BY Q.Id, A.Score DESC;""".format(threshold=upvotes_threshold)
+
+        q2 = """SELECT Distinct ON (ParentId) ParentId as question_id, OwnerUserId as answerer_id,  Id as answer_post_id, Score FROM Posts WHERE PostTypeId = {{answerPostType}} AND Score >= {threshold} AND OwnerUserId IS NOT NULL ORDER BY ParentId, Score Desc""".format(threshold=upvotes_threshold)
+
+        out = self.query(q2, use_macros=True)
+
+        out.set_index("question_id", inplace=True, verify_integrity=True)
+        return out
+
+    def get_accepted_answer(self):
+        """
+
+        :return: dataframe question_id, answerer_id, answer_post_id with the accepted answer for each question
+        """
+
+        q = """SELECT Q.Id as question_id, A.OwnerUserId as answerer_id, A.Id AS answer_post_id, A.Score FROM Posts Q INNER JOIN Posts A on Q.AcceptedAnswerId = A.Id WHERE Q.PostTypeId = {questionPostType} AND A.PostTypeId = {answerPostType} AND A.OwnerUserId IS NOT NULL"""
+
+        out = self.query(q, use_macros=True)
+        out.set_index("question_id", inplace=True, verify_integrity=True)
+        return out
