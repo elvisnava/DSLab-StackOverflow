@@ -4,13 +4,15 @@ import pandas as pd
 import numpy as np
 import os
 import sys
-from utils import split_inds, mrr
+from utils import split_inds, mrr, shuffle_3
+# from sklearn.utils import shuffle
 
 # SPLIT VERSION:
 # split such that the test set consists of completely different users: "user"
 # split randomly, such that test and train might contain question-answer pairs of the same user: "mixed"
-SPLIT_MODE = "user"
-SPLIT = 0.8
+# split such that completly different users from a completely different time frame are selected: "time"
+SPLIT_MODE = "time"
+SPLIT = 0.7
 
 # Load data
 dataframes = []
@@ -18,7 +20,7 @@ for file in os.listdir("data/"):
     if file[0]=="." or "example" in file:
         continue
     df_read = pd.read_csv(os.path.join("data",file), index_col="id")
-    print("Successfully loaded ", file)
+    # print("Successfully loaded ", file)
     dataframes.append(df_read)
 
 if SPLIT_MODE=="user":
@@ -35,7 +37,9 @@ if SPLIT_MODE=="user":
     dataframes_test = [dataframes[j] for j in inds[k:]]
     df_train = pd.concat(dataframes_train)
     df_test = pd.concat(dataframes_test)
-    print(len(df_train), len(df_test))
+    print("Number of users in train set:", len(dataframes_train))
+    print("Number of users in test set:", len(dataframes_test))
+    print("Number of samples including all answer-question pairs: Train:", len(df_train), " Test:", len(df_test))
 elif SPLIT_MODE=="mixed":
     # Take completely random sample (same user might be in test and train set, for different answers)
     df = pd.concat(dataframes)
@@ -51,6 +55,19 @@ elif SPLIT_MODE=="mixed":
     train_inds, test_inds = split_inds(nr_groups, split=SPLIT)
     df_train = pd.concat([ df_grouped.get_group(group) for i,group in enumerate(df_grouped.groups) if i in train_inds])
     df_test = pd.concat([ df_grouped.get_group(group) for i,group in enumerate(df_grouped.groups) if i in test_inds])
+elif SPLIT_MODE=="time":
+    df_train = pd.concat(dataframes)
+    dataframes_test = []
+    for file in os.listdir("data_later/"):
+        if file[0]=="." or "example" in file:
+            continue
+        df_read = pd.read_csv(os.path.join("data_later",file), index_col="id")
+        # print("Successfully loaded ", file)
+        dataframes_test.append(df_read)
+    df_test = pd.concat(dataframes_test)
+    print("Number of users in train set:", len(dataframes))
+    print("Number of users in test set:", len(dataframes_test))
+    print("Number of samples including all answer-question pairs: Train:", len(df_train), " Test:", len(df_test))
 else:
     print("ERROR: SPLIT MODE DOES NOT EXIST")
     sys.exit()
@@ -71,8 +88,13 @@ G_test = df_test['decision_time'].values
 # print(sorted(np.unique(G_test//100)))
 assert(len(X_train)==len(Y_train))
 
+print("Size of training set: ", len(Y_train), " Test set:", len(Y_test))
+class_counts = np.unique(Y_train, return_counts=True)[1]
+print("Class imbalance: 1:", class_counts[0]//class_counts[1])
+
 # Train RF
-clf = RandomForestClassifier(n_estimators=100, max_depth=30, class_weight={0:1, 1:20}, random_state=0)
+X_train, Y_train, G_train = shuffle_3(X_train, Y_train, G_train)
+clf = RandomForestClassifier(n_estimators=100, max_depth=10, class_weight={0:1, 1:40})
 clf.fit(X_train,Y_train)
 
 # investigate features
@@ -81,7 +103,17 @@ print("Features sorted by their importance for prediction:")
 print(np.asarray(features)[sorted_importance])
 
 probs_train = clf.predict_proba(X_train)
-print("Training MRR:", mrr(probs_train[:,1], G_train, Y_train))
+score, _ = mrr(probs_train[:,1], G_train, Y_train)
+print("Training MRR:", score)
 
 probs_test = clf.predict_proba(X_test)
-print("Testing MRR:", mrr(probs_test[:,1], G_test, Y_test))
+score, ranks = mrr(probs_test[:,1], G_test, Y_test)
+print("Testing MRR score:", score, " Average rank:", np.mean(list(ranks.values())))
+
+df_test_gt = df_test[df_test["label"]==1]
+res_list = []
+for g in df_test_gt["decision_time"].values:
+    res_list.append(ranks[g])
+df_test_gt["rank"] = res_list
+print(df_test_gt.head(10))
+df_test_gt.to_csv("ranks_features.csv")
