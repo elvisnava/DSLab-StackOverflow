@@ -15,6 +15,7 @@ def mrr(out_probs, grouped_queries, ground_truth):
     assert(len(out_probs)==len(ground_truth))
     assert(len(out_probs)==len(grouped_queries))
     summed_score = 0
+    rank_list = {}
     for q in np.unique(grouped_queries):
         # select the current block (one user-(answer+openquestions) pair)
         gt_group = ground_truth[grouped_queries==q]
@@ -24,8 +25,15 @@ def mrr(out_probs, grouped_queries, ground_truth):
         out_group = out_probs[grouped_queries==q]
         ranks = np.argsort(out_group).tolist()
         rank = len(ranks)-ranks.index(gt_label)
+        rank_list[q] = rank
         summed_score += 1/rank
-    return summed_score/len(np.unique(grouped_queries))
+    return summed_score/len(np.unique(grouped_queries)), rank_list
+
+def shuffle_3(X,Y,G):
+    assert(len(X)==len(Y))
+    assert(len(X)==len(Y))
+    randinds = np.random.permutation(len(Y))
+    return X[randinds], Y[randinds], G[randinds]
 
 def mrr2(out_probs, grouped_queries, ground_truth):
     """

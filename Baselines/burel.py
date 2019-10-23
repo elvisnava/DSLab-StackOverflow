@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 import scipy.stats as st
+import os
 
 def sample_open_questions(open_questions, sample_size):
     ## DISTRIBUTION APPROACH:
@@ -35,19 +36,23 @@ min_answers = 10
 NR_NEG_SAMPLES = 100
 
 data = Data()
-data.set_time_range(start=date(year=2014, month=1, day=3), end=date(year=2014, month=5, day=1))
+data.set_time_range(start=date(year=2015, month=1, day=3), end=date(year=2015, month=5, day=1)) # one year later
 
 user_ids = data.query("SELECT OwnerUserId, c  FROM (SELECT OwnerUserId, count(OwnerUserId) as c FROM Posts WHERE PostTypeId=2 GROUP BY OwnerUserId) as tab WHERE c>%i"%min_answers)
 assert(np.all(user_ids["c"].values > min_answers))
 
 user_ids = user_ids["owneruserid"].values
+# do not take the users that are in the data directory already
+file_list = os.listdir("data")
+user_list_sofar = np.asarray([u.split(".")[0][4:] for u in file_list if u[0]=="u"]).astype(int)
+user_ids = [u for u in user_ids if u not in user_list_sofar]
 
 ## GET USER AND FEATURES
 u_features = get_user_features(data)
 # u_features = u_features.loc[u_features['owneruserid'].isin(user_ids)] # not needed because we also need the users who have asked the question, they might have less than 5 posts
 
 
-for j in range(40):
+for j in range(25):
     time_user_counter = 0
     # take one user
     user_id = user_ids[j]
@@ -115,7 +120,7 @@ for j in range(40):
     # print(q_features.loc[rand_user,:])
     # print(np.asarray(q_features).shape)
     q_features = q_features.drop(["owneruserid", "body", "question_id"], axis=1)
-    q_features.to_csv("data/user"+str(user_id)+".csv")
+    q_features.to_csv("data_later/user"+str(user_id)+".csv")
     print("SAVED USER", user_id)
     del q_features
 
