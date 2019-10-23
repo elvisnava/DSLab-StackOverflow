@@ -149,6 +149,13 @@ class Data:
     def get_questions(self):
         return self.query("SELECT Id, Title, Body, Tags FROM Posts WHERE PostTypeID = {}".format(self.questionPostType))
 
+    def get_answered_questions(self, answer_upvotes_threshold):
+        """get questions for which there is an answer"""
+        # TODO use queries from get_accepted_answer and get_best_answer_above_threshold
+        # Where Id in (accepted Naswer query) or Id in (best answer query)
+        pass
+
+
 
     def _clean_html(self, raw_html):
         cleantext = re.sub(r'<.*?>', '', raw_html)
@@ -171,6 +178,7 @@ class Data:
 
     def get_best_answer_above_threshold(self, upvotes_threshold):
         """
+        Returns everything where the answer is in the set timeperiod, the question might have been asked earlier.
         :return: dataframe question_id, answerer_id, answer_post_id with the answer with the most number of upvotes as long as it is above the given threshold. Doesn't care whether answer is accepted or not
         """
         # this query results in an endless loop I don't know why:
@@ -182,7 +190,7 @@ class Data:
         #     ON A.ParentId = Q.Id
         #     ORDER BY Q.Id, A.Score DESC;""".format(threshold=upvotes_threshold)
 
-        q2 = """SELECT Distinct ON (ParentId) ParentId as question_id, OwnerUserId as answerer_id,  Id as answer_post_id, Score FROM Posts WHERE PostTypeId = {{answerPostType}} AND Score >= {threshold} AND OwnerUserId IS NOT NULL ORDER BY ParentId, Score Desc""".format(threshold=upvotes_threshold)
+        q2 = """SELECT Distinct ON (ParentId) ParentId as question_id, OwnerUserId as answerer_id,  Id as answer_post_id, Score FROM Posts WHERE PostTypeId = {{answerPostType}} AND Score >= {threshold} AND OwnerUserId IS NOT NULL AND ParentId in (select Id from Posts WHERE PostTypeId = {{questionPostType}}) ORDER BY ParentId, Score Desc""".format(threshold=upvotes_threshold)
 
         out = self.query(q2, use_macros=True)
 

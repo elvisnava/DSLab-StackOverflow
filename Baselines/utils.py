@@ -1,9 +1,33 @@
-from lda import LDA
 from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
+import scipy.spatial
+from features import LDAWrapper
+from numba import jit
 
-
+#@jit(nopython=True)
 def mrr(out_probs, grouped_queries, ground_truth):
+    """
+    :param out_probs: List/Array of probabilities indicating likelihood of user to select a question
+    :param grouped_queries: list indicating the group it belongs to - can contain any identifier,
+    but in each group there must be exactly one ground truth
+    :param ground_truth: List/array of same length, containing the actual probabilities (0 for negative, 1 for positive samples)
+    """
+    assert(len(out_probs)==len(ground_truth))
+    assert(len(out_probs)==len(grouped_queries))
+    summed_score = 0
+    for q in np.unique(grouped_queries):
+        # select the current block (one user-(answer+openquestions) pair)
+        gt_group = ground_truth[grouped_queries==q]
+        gt_label = np.nonzero(gt_group)[0]
+        assert(len(gt_label)==1)
+        gt_label = gt_label[0]
+        out_group = out_probs[grouped_queries==q]
+        ranks = np.argsort(out_group).tolist()
+        rank = len(ranks)-ranks.index(gt_label)
+        summed_score += 1/rank
+    return summed_score/len(np.unique(grouped_queries))
+
+def mrr2(out_probs, grouped_queries, ground_truth):
     """
     :param out_probs: List/Array of probabilities indicating likelihood of user to select a question
     :param grouped_queries: list indicating the group it belongs to - can contain any identifier,
@@ -45,10 +69,10 @@ def split_groups(df_grouped):
 
 
 def pipeline2nested_list(pipeline):
-    if hasattr(pipeline, "transformers_"):
-        children = [c[1] for c in pipeline.transformers_]
-    elif hasattr(pipeline, "steps"):
-        children = pipeline.steps
+    if hasattr(pipeline, "named_transformers_"):
+        children = pipeline.named_transformers_.values()
+    elif hasattr(pipeline, "named_steps"):
+        children = pipeline.named_steps.values()
     elif type(pipeline) == tuple:
         # now its a (name, transformer) pair
         return pipeline[1]
@@ -63,7 +87,7 @@ def _rek_find_lda_and_vectorizer(nested_list_of_steps):
     for s_id, stage in enumerate(nested_list_of_steps):
         if type(stage) == CountVectorizer:
             for follow_stage in nested_list_of_steps[s_id+1:]:
-                if type(follow_stage) == LDA:
+                if type(follow_stage) == LDAWrapper:
                     return stage, follow_stage
         elif type(stage) == list:
             return _rek_find_lda_and_vectorizer(stage)
@@ -89,20 +113,64 @@ def top_n_words_by_topic(vectorizer, lda_obj, n_words):
 
     return result
 
-def indicator_left_not_in_right(left, right, on):
+def rows_left_not_in_right(left, right, on):
     """
 
     :param left: dataframe
     :param right: dataframe
     :param on: list of strings with all the columns that should be matched
-    :return: a boolean numpy array of same length as left. its True iff the corresponding row of left DOES NOT occur anywhere in right with matching values of the columns on
+    :return: all the rows in left that are not also in right (as specified by on)
     """
     # https://stackoverflow.com/questions/28901683/pandas-get-rows-which-are-not-in-other-dataframe
     reduced_right = (right[on]).drop_duplicates()
 
-    reduced_left = left[on]
+    # reduced_left = left[on]
 
-    df_all = reduced_left.merge(reduced_right, on=on, how='left', indicator=True)
+    df_all = left.merge(reduced_right, on=on, how='left', indicator=True)
 
     indicator = df_all._merge == 'left_only'
-    return indicator
+
+    values_left_not_in_right = df_all[indicator].drop(columns="_merge")
+
+    _overlap = values_left_not_in_right.merge(right, on=on, how="inner")
+    assert(len(_overlap)==0)
+    return values_left_not_in_right
+
+
+def get_closest_n(source_features, context_features, source_ids, context_ids, n, metric='cosine'):
+    """
+    For each source point (with source_features and source_id) find the ids of the n closest context points.
+    However if the context points contain the same point as the source point (as identified by matching source_id and context_id)
+    This point is not returned. I.e. a point is not the closest point to itself.
+
+
+    :param source_features: n_source x n_features numpy array
+    :param context_features: n_context x n_features numpy array
+    :param source_ids : n_source numpy array with indices
+    :param context_ids: n_context numpy array with indices
+    :return: a numpy array of shape len(source_ids) x n || for each source sample the ids (in context_ids) of the samples with the minimal distance to the source example
+    """
+
+    distances = scipy.spatial.distance.cdist(source_features, context_features, metric=metric) # output is n_source x n_context
+
+    is_same_id = source_ids[:, None] == context_ids[None, :]
+
+    distances[is_same_id] = np.inf
+
+    inplace_indices_of_smallest_n = np.argpartition(distances, n, axis=1)[:, :n]
+
+    context_indices_of_smallest_n = context_ids[inplace_indices_of_smallest_n]
+
+    return context_indices_of_smallest_n
+
+def check_overlap(df1, df2, on):
+    merged = df1.merge(df2, on=on, how="inner")
+
+    overlap = len(merged) > 0
+    return overlap
+
+def print_feature_importance(importanceval, names):
+    sorted = np.argsort(-importanceval)
+
+    for i in sorted:
+        print("Importance {:.3f} of Feature {} ".format(importanceval[i], names[i]))

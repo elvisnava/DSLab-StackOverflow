@@ -5,6 +5,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
 import re
 import readability
+from lda import LDA
+import joblib
 
 class AppendArgmax(BaseEstimator, TransformerMixin):
 
@@ -19,7 +21,14 @@ class AppendArgmax(BaseEstimator, TransformerMixin):
 
 class ReadabilityIndexes(BaseEstimator, TransformerMixin):
     @staticmethod
-    def get_readability_measures(text, readability_measures):
+    def all_readbility_measures(text):
+        list_of_all_measures = [readability.getmeasures(t, lang="en")['readability grades'] for t in text]
+
+        df = pd.DataFrame.from_records(list_of_all_measures)
+
+        return df
+
+    def get_readability_measures(self, text, readability_measures):
         """
 
         :param text:
@@ -27,14 +36,22 @@ class ReadabilityIndexes(BaseEstimator, TransformerMixin):
         :return:
         """
 
-        measures = readability.getmeasures(text, lang='en')['readability grades']
+        if self.memory is not None:
+            func_cached = joblib.Memory(self.memory, verbose=0).cache(ReadabilityIndexes.all_readbility_measures)
+        else:
+            func_cached = ReadabilityIndexes.all_readbility_measures
 
-        out = [measures[m_name] for m_name in readability_measures]
+        all_measures = func_cached(text)
+
+        out = all_measures[readability_measures]
 
         return out
 
-    def __init__(self, measures_to_compute):
+    def __init__(self, measures_to_compute, memory=None):
         self.measures_to_compute = measures_to_compute
+
+        self.memory = memory
+
 
     def fit(self, X, y=None):
         return self
@@ -42,10 +59,11 @@ class ReadabilityIndexes(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         #assert(len(X.shape)==1 or X.shape[1]==1)
 
-        f = lambda text: ReadabilityIndexes.get_readability_measures(text, self.measures_to_compute)
-
-        result = np.array(list(map(f, X)))
+        result = self.get_readability_measures(X, self.measures_to_compute)
         return result
+
+class LDAWrapper(BaseEstimator, TransformerMixin, LDA):
+    pass
 
 class _StatelessTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, require_pandas=False):

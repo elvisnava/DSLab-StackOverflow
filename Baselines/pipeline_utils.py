@@ -1,5 +1,6 @@
 from sklearn.compose import ColumnTransformer
 import pandas as pd
+from lda import LDA
 
 class NamedColumnTransformer(ColumnTransformer):
     def __init__(self, transformers, remainder="drop", sparse_threshold=0.3, n_jobs=None, transformer_weights=None, verbose=False):
@@ -58,3 +59,5 @@ class NamedColumnTransformer(ColumnTransformer):
 
     def np_array2dataframe(self, x):
         return pd.DataFrame(data=x, columns=self.final_column_names)
+
+

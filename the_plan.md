@@ -16,3 +16,11 @@
 
 * IEEE 2015: Who will Answer my Question on Stack Overflow? 
     * Technically they do ```Question -> Set[Users]```, since they binary classify `(question,user)` pairs
+    
+    
+## Clemens Notes
+* we can do a train test split in time predict/train peformance on questions before or after timepoint using only the data available up to timepoint or all data
+* or we can do train test split always using information from all time but on different subsets of questions
+
+* what do I do with users in the test set that didn't exist during training? 
+    -> consequently they can only have a default feature as the system does not know anything at all about them yet. 
