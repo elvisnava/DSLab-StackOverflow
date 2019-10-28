@@ -2,7 +2,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 import scipy.spatial
 from features import LDAWrapper
-from numba import jit
+from scipy.stats import rankdata
 
 #@jit(nopython=True)
 def mrr(out_probs, grouped_queries, ground_truth):
@@ -11,22 +11,28 @@ def mrr(out_probs, grouped_queries, ground_truth):
     :param grouped_queries: list indicating the group it belongs to - can contain any identifier,
     but in each group there must be exactly one ground truth
     :param ground_truth: List/array of same length, containing the actual probabilities (0 for negative, 1 for positive samples)
+
+    returns the mrr score and a list of the same size as the parameter lists, which contains the predicted rank for each example
     """
     assert(len(out_probs)==len(ground_truth))
     assert(len(out_probs)==len(grouped_queries))
     summed_score = 0
-    rank_list = {}
+    rank_list = np.zeros(len(out_probs))
     for q in np.unique(grouped_queries):
         # select the current block (one user-(answer+openquestions) pair)
         gt_group = ground_truth[grouped_queries==q]
+        # find index of the gt answer in group g (the one with label 1)
         gt_label = np.nonzero(gt_group)[0]
         assert(len(gt_label)==1)
         gt_label = gt_label[0]
+        # select predictions for current group
         out_group = out_probs[grouped_queries==q]
-        ranks = np.argsort(out_group).tolist()
-        rank = len(ranks)-ranks.index(gt_label)
-        rank_list[q] = rank
+        # compute the ranks for the group (len(out_group) necessary for ascending)
+        ranks = len(out_group)+1 - rankdata(out_group).astype(int)
+        rank = ranks[gt_label] # get predicted rank of ground truth
+        rank_list[grouped_queries==q] = ranks
         summed_score += 1/rank
+    assert(not np.any(rank_list==0)) # now rank_list should be filled completely 
     return summed_score/len(np.unique(grouped_queries)), rank_list
 
 def shuffle_3(X,Y,G):
