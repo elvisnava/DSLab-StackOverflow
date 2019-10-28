@@ -17,6 +17,10 @@ class Test_Data(unittest.TestCase):
         out = self.data.query("Select * from Posts limit 5")
         self.assertTrue(len(out)==5)
 
+    def test_get_user_tags(self):
+        uT = self.data.get_user_tags()
+        pass
+
     def test_query_replacement(self):
         def check(orig, target):
             replaced = self.data.replace_all_tables_with_views(orig)

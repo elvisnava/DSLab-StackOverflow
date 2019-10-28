@@ -18,6 +18,53 @@ class AppendArgmax(BaseEstimator, TransformerMixin):
         max_ids = np.argmax(X, axis=1)
         return np.concatenate([X, max_ids[:, np.newaxis]], axis=1)
 
+class TopicAffinity(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.question_tags_col = "question_tags"
+        self.user_tags_col = "user_tags"
+
+    def fit(self, X, y=None):
+        return self
+
+    def to_taglist(self, string):
+        if (not isinstance(string, str) and np.isnan(string)) or len(string)==0:
+            return []
+
+        assert(string[0]=="<")
+        assert(string[-1]==">")
+
+        return string[1:-1].split("><")
+
+
+    def transform(self, X, y=None):
+        n_samples, n_cols = X.shape
+        assert(n_cols == 2)
+
+        out = np.zeros((n_samples, 1))
+
+        for i in range(n_samples):
+            question_tags_str = X[self.question_tags_col][i]
+            user_tags_str = X[self.user_tags_col][i]
+
+            user_tags = self.to_taglist(user_tags_str)
+
+            unique_user_tags, counts = np.unique(user_tags, return_counts=True)
+            user_pdf = counts/np.sum(counts)
+
+            question_tags = self.to_taglist(question_tags_str)
+
+            activated_tags = np.isin(unique_user_tags, question_tags)
+
+
+            probs_of_activated = user_pdf[activated_tags]
+            if len(probs_of_activated) > 0:
+                prod = np.prod(probs_of_activated)
+            else:
+                prod = 0
+
+            out[i, 0] = prod
+
+        return out
 
 class ReadabilityIndexes(BaseEstimator, TransformerMixin):
     @staticmethod
@@ -157,6 +204,7 @@ class NumberOfEquationBlocks(_StatelessTransformer):
         n_eq = n_delim //2
 
         return n_eq
+
 
 class NumberOfLinks(_StatelessTransformer):
     def __init__(self):

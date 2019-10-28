@@ -5,7 +5,7 @@ import re
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
 
-    def __init__(self, db_address = None, verbose = 0):
+    def __init__(self, db_address = None, verbose = 0, tables_with_time_res=None):
 
         if db_address is None:
             db_address = 'postgresql://localhost/crossvalidated'
@@ -18,7 +18,10 @@ class Data:
 
         self.verbose = verbose
 
-        self.table_names_that_need_timerestrictions = ["Posts", "Users", "Votes"]
+        if tables_with_time_res is None:
+            self.table_names_that_need_timerestrictions = ["Posts", "Users", "Votes"]
+        else:
+            self.table_names_that_need_timerestrictions = tables_with_time_res
 
         self.start, self.end = None, None
         self.drop_timewindow_views()
@@ -49,6 +52,8 @@ class Data:
     def get_temp_tables_string(self, raw_tablenames = None):
         if raw_tablenames is None:
             raw_tablenames = self.table_names_that_need_timerestrictions
+        elif len(raw_tablenames) == 0:
+            return ""
 
         time_range_condition = self._time_range_condition_string(start=self.start, end=self.end)
 
@@ -62,7 +67,8 @@ class Data:
 
         return all_views
 
-
+    def get_users_with_tags(self):
+        pass
 
     def get_tables(self):
         query = "SELECT * FROM pg_catalog.pg_tables WHERE schemaname='public';"
@@ -73,7 +79,8 @@ class Data:
         return self.raw_query(query)
 
     def execute_command(self, command):
-        print("Execute command >>" + command)
+        if self.verbose >= 1:
+            print("Execute command >>" + command)
         res = self.cnx.execute(command)
         return res
 
@@ -208,3 +215,23 @@ class Data:
         out = self.query(q, use_macros=True)
         out.set_index("question_id", inplace=True, verify_integrity=True)
         return out
+
+    def get_user_tags(self):
+        q = """SELECT OwnerUserId as User_Id, string_agg(Tags, '') as question_tags FROM Posts WHERE PostTypeId = {questionPostType} Group By OwnerUserId
+            """
+
+        user_question_tags = self.query(q, use_macros=True)
+
+        q_answers = """SELECT A.OwnerUserId as User_id, string_agg(Q.Tags, '') as answered_tags FROM Posts Q INNER JOIN Posts A on A.ParentId = Q.Id WHERE A.PostTypeId = {answerPostType} GROUP BY A.OwnerUserId"""
+
+        user_answers_tags = self.query(q_answers, use_macros=True)
+
+        both = pd.merge(user_question_tags, user_answers_tags, on="user_id", how="outer")
+
+        both = both.fillna("")
+
+        both["user_tags"] = both.question_tags + both.answered_tags
+
+        both.user_id = pd.to_numeric(both.user_id)
+
+        return both
