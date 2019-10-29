@@ -169,19 +169,22 @@ class Data:
         return cleantext
 
 
-    def get_answer_for_question(self, threshold):
+    def get_answer_for_question(self, threshold=None):
         """
         :return: dataframe question_id (index), answerer_id, answer_post_id, score || all pairs where user anwerer_id answered question question_id to an acceptable standard.
         there is at most one answerer per question it is the accepted answer if it exists or the answer with the hightest score above the given threshold.
         Note that the index of the returned dataframe corresponds to the question_id
         """
         accepted_answers = self.get_accepted_answer()
-        best_answers = self.get_best_answer_above_threshold(threshold)
+        if threshold:
+            best_answers = self.get_best_answer_above_threshold(threshold)
 
-        filtered_best_answers = best_answers.drop(index=accepted_answers.index, errors="ignore") # forget all best answers for questions where an accepted answer exists
+            filtered_best_answers = best_answers.drop(index=accepted_answers.index, errors="ignore") # forget all best answers for questions where an accepted answer exists
 
-        result = pd.concat([accepted_answers, filtered_best_answers], verify_integrity=True)
-        return result
+            result = pd.concat([accepted_answers, filtered_best_answers], verify_integrity=True)
+            return result
+        else:
+            return accepted_answers
 
     def get_best_answer_above_threshold(self, upvotes_threshold):
         """

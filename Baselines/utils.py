@@ -151,7 +151,7 @@ def rows_left_not_in_right(left, right, on):
     return values_left_not_in_right
 
 
-def get_closest_n(source_features, context_features, source_ids, context_ids, n, metric='cosine'):
+def get_closest_n(source_features, context_features, source_ids, context_ids, n, metric='cosine', allow_less=False):
     """
     For each source point (with source_features and source_id) find the ids of the n closest context points.
     However if the context points contain the same point as the source point (as identified by matching source_id and context_id)
@@ -165,11 +165,20 @@ def get_closest_n(source_features, context_features, source_ids, context_ids, n,
     :return: a numpy array of shape len(source_ids) x n || for each source sample the ids (in context_ids) of the samples with the minimal distance to the source example
     """
 
+
     distances = scipy.spatial.distance.cdist(source_features, context_features, metric=metric) # output is n_source x n_context
 
     is_same_id = source_ids[:, None] == context_ids[None, :]
 
     distances[is_same_id] = np.inf
+
+    n_available = len(context_features) - np.any(is_same_id) # if the context contains the source we can't take them
+
+    if n_available < n:
+        if allow_less:
+            n = n_available
+        else:
+            raise RuntimeError("You wanted {} closest points, but there are only {} context points. Consider allow_less".format(n, n_available))
 
     inplace_indices_of_smallest_n = np.argpartition(distances, n, axis=1)[:, :n]
 

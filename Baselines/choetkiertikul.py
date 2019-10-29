@@ -25,20 +25,23 @@ import utils
 import pandas as pd
 import time
 
-load_from_saved = True
+load_from_saved = False
+grid_search = False
+use_topic_affinity = False
 
 
 data_training = Data(verbose=1, tables_with_time_res=['Posts'])
-begin_training_date =date(year=2015, month=1, day=1)
+begin_training_date =date(year=2000, month=1, day=1)
+# begin_training_date = date(year=2015, month=6, day=1)
 end_training_date = date(year=2015, month=12, day=31)
 data_training.set_time_range(start=begin_training_date, end=end_training_date)
 
 data_testing = Data(verbose=0, tables_with_time_res=['Posts'])
 begin_testing_date = end_training_date + timedelta(days=1)
-end_testing_date = date(year=2016, month=12, day=31)
+end_testing_date = date(year=2016, month=1, day=31)
 data_testing.set_time_range(start=begin_training_date, end=end_testing_date)
 
-answer_threshold = 10
+answer_threshold = None #10
 n_context_questions = 30
 chance_mrr = np.mean(1/(1+np.arange(n_context_questions)))
 print("Chance Mrr for {} candidates is {}".format(n_context_questions, chance_mrr))
@@ -102,6 +105,8 @@ def get_similar_questions(source_questions, context_questions, column_names_to_u
 
     return pd dataframe with source_question_ids and context_question_ids. there are gonna be multiple lines with same source_question_id
     """
+    #TODO change this to only consider questions until that point
+    # iterate through questions
 
     topics = np.unique(source_questions.prevalent_topic)
 
@@ -115,10 +120,9 @@ def get_similar_questions(source_questions, context_questions, column_names_to_u
         features_source_in_topic = source_in_topic[column_names_to_use_as_features]
         features_context_in_topic = context_in_topic[column_names_to_use_as_features]
 
+        closest_context_question_ids = utils.get_closest_n(source_features=features_source_in_topic, context_features=features_context_in_topic, source_ids=source_in_topic.question_id.values, context_ids=context_in_topic.question_id.values, n=n_context_questions, metric='cosine', allow_less=True)
 
-        closest_context_question_ids = utils.get_closest_n(source_features=features_source_in_topic, context_features=features_context_in_topic, source_ids=source_in_topic.question_id.values, context_ids=context_in_topic.question_id.values, n=n_context_questions, metric='cosine')
-
-        source_question_ids_repeated = np.repeat(source_in_topic.question_id.values[:, None], repeats=n_context_questions, axis=1)
+        source_question_ids_repeated = np.repeat(source_in_topic.question_id.values[:, None], repeats=closest_context_question_ids.shape[1], axis=1)
 
         all_source_question_ids.append(source_question_ids_repeated.flatten())
         all_similar_question_ids.append(closest_context_question_ids.flatten())
@@ -149,7 +153,8 @@ def make_sample(target_question_features, users_who_answered_target_questions, c
     question_with_user_candidates = question_with_sim_questions.filter(items=["question_id", "answerer_id"])
     question_with_user_candidates["label"] = False
 
-    assert(np.all(n_context_questions == np.unique(question_with_user_candidates.question_id.values, return_counts=True)[1]))
+    if not (np.all(n_context_questions == np.unique(question_with_user_candidates.question_id.values, return_counts=True)[1])):
+        print("WARN>> Questions have different numbers of context questions")
     assert(np.any(n_context_questions != np.unique(question_with_sim_questions.similar_question_id.values, return_counts=True)[1]))
 
     question_with_actuall_awnserer = target_question_features.merge(users_who_answered_target_questions, how="inner", on="question_id", validate="1:1")[["question_id", "answerer_id"]]
@@ -160,7 +165,7 @@ def make_sample(target_question_features, users_who_answered_target_questions, c
 
     fake_answerer_candidates = utils.rows_left_not_in_right(question_with_user_candidates, question_with_actuall_awnserer, on=["question_id", "answerer_id"])
     true_candidates_selected_through_similarity = len(question_with_user_candidates) - len(fake_answerer_candidates)
-    print("({}) {:1.2f} % of the correct answerers were selected through similarity ".format(true_candidates_selected_through_similarity, true_candidates_selected_through_similarity *100 / len(question_with_actuall_awnserer)))
+    print("({}/{}) {:1.2f} % of the correct answerers were selected through similarity ".format(true_candidates_selected_through_similarity, len(question_with_actuall_awnserer), true_candidates_selected_through_similarity *100 / len(question_with_actuall_awnserer)))
 
     _overlap = fake_answerer_candidates.merge(question_with_actuall_awnserer, on=["question_id", "answerer_id"], how="inner")
     assert(len(_overlap)==0)
@@ -206,36 +211,50 @@ question_feature_pipeline = NamedColumnTransformer([
     ('readability', readability_pipeline,  'body')
 ]) # end Column transformer
 
-feature_cols = ['titleLength', 'topic_affinity', 'questionLength', 'nCodeBlocks', 'nEquationBlocks', 'nExternalLinks', 'nTags', 'readability', 'reputation', 'upvotes', 'downvotes', 'plattformage_days', 'numberquestions', 'numberanswers', 'numberacceptedanswers']
+feature_cols = ['titleLength', 'questionLength', 'nCodeBlocks', 'nEquationBlocks', 'nExternalLinks', 'nTags', 'readability', 'reputation', 'upvotes', 'downvotes', 'plattformage_days', 'numberquestions', 'numberanswers', 'numberacceptedanswers'] #+ ['label']
+if use_topic_affinity:
+    feature_cols += ["topic_affinity"]
+    pair_feature_pipeline = NamedColumnTransformer([
+        ('topic_affinity', features.TopicAffinity(), ["question_tags", "user_tags"])
+    ])
+else:
+    pair_feature_pipeline = None
 
-pair_feature_pipeline = NamedColumnTransformer([
-    ('topic_affinity', features.TopicAffinity(), ["question_tags", "user_tags"])
-])
 
 classification_pipeline = Pipeline([('impute', SimpleImputer(strategy='constant', fill_value=0)),
-                                    ('rf', RandomForestClassifier(n_estimators=200, min_samples_leaf=0.00005, n_jobs=1,
-                                                                  class_weight="balanced"))])
+                                    ('rf', RandomForestClassifier(n_estimators=150, min_samples_leaf=0.0003, n_jobs=1,
+                                                                  class_weight="balanced", max_depth=175))])
 
 def append_pair_features(df, pair_features_pipeline=pair_feature_pipeline):
-    extra_cols = pair_features_pipeline.fit_transform_df(df)
-    df = pd.concat([df, extra_cols], axis=1)
-    return df
+    if pair_features_pipeline:
+        extra_cols = pair_features_pipeline.fit_transform_df(df)
+        df = pd.concat([df, extra_cols], axis=1)
+        return df
+    else:
+        return df
 
 
 def dataframe_to_xy(df):
+    global feature_cols
 
     df["plattformage_days"] = df.plattformage.dt.days
 
+    y = df["label"].values
+    _feature_cols = feature_cols
+
+    # df["noisy_label"] = y.astype(float) + 0.1 * np.random.rand(len(y))
+    # _feature_cols = feature_cols + ["noisy_label"]
+    # print("WARN >> added noisy label")
+
     actuall_cols = set(df.columns)
     assert(len(set(feature_cols) - actuall_cols)==0)
-
     cols_that_didnt_get_picked = actuall_cols - set(feature_cols)
+
+    print("Used features: {}".format(_feature_cols))
     print("Columns that didn't get picked {}".format(cols_that_didnt_get_picked))
 
-    X = df[feature_cols].values
+    X = df[_feature_cols].values
     X = X.astype(float)
-
-    y = df["label"].values
     return X, y
 
 def make_training_and_testing_sample_wrapper():
@@ -281,8 +300,13 @@ def make_training_and_testing_sample_wrapper():
     print("Getting and filtering the test data took {}".format(time.time() - t0))
 
     question_features_test = question_feature_pipeline.transform_df(test_questions_with_answers)
-    testing_sample = make_sample(target_question_features=question_features_test, users_who_answered_target_questions=answers_for_test_questions,
-                                 context_question_features=question_features_train, users_who_answered_context_questions=answers_for_questions_train, user_features=user_data_train)
+    testing_sample = make_sample(target_question_features  = question_features_test, users_who_answered_target_questions  = answers_for_test_questions,
+                                 # context_question_features = question_features_test, users_who_answered_context_questions = answers_for_test_questions,
+                                 context_question_features = question_features_train, users_who_answered_context_questions = answers_for_questions_train,
+                                 user_features=user_data_train) #TODO wrong context
+    # TODO wrong context
+    # TODO wrong context
+
     testing_sample = append_pair_features(testing_sample)
 
     return training_sample, testing_sample
@@ -299,7 +323,7 @@ train_X, train_y = dataframe_to_xy(training_sample)
 
 assert(np.all(train_y == training_sample["label"]))
 assert(np.all(train_X[:, 0] == training_sample["titleLength"]))
-assert(np.all(np.isclose(train_X[:, 1] , training_sample["topic_affinity"])))
+assert(np.all(np.isclose(train_X[:, 7] , training_sample["reputation"])))
 # train_X, train_y = train_X[-9999:], train_y[-9999:]
 # print("Making the sample took {} s, {} samples".format(time.time()-t0, len(train_y)))
 
@@ -307,12 +331,13 @@ assert(np.all(np.isclose(train_X[:, 1] , training_sample["topic_affinity"])))
 # print("Training CV accuracy: {}".format(train_cv_accuracy))
 
 # Grid Search
-if False:
-    param_grid = {"rf__n_estimators": (50, 100, 150, 200), "rf__min_samples_leaf": np.linspace(0.000000001, 0.05, 8), "rf__class_weight": (None, "balanced")}
-    grid_clf = GridSearchCV(classification_pipeline, param_grid=param_grid ,scoring='f1', n_jobs=-1)
+if grid_search:
+    param_grid = {"rf__n_estimators": (50, 100, 150, 200), "rf__min_samples_leaf": np.linspace(0.000000001, 0.05, 8), "rf__max_depth": [5, 25, 50, 75, 100],  "rf__class_weight": (None, "balanced")}
+    grid_clf = GridSearchCV(classification_pipeline, param_grid=param_grid, scoring='f1', n_jobs=-1, verbose=1)
     grid_clf.fit(train_X, train_y)
     print("Best Parmeters: {}".format(grid_clf.best_params_)) # Best Parmeters: {'rf__class_weight': 'balanced', 'rf__min_samples_leaf': 0.1, 'rf__n_estimators': 100}
     print("Best Score: {}".format(grid_clf.best_score_))
+    raise KeyboardInterrupt("")
     #
 
 classification_pipeline.fit(train_X, train_y)
@@ -327,7 +352,7 @@ test_X, test_y = dataframe_to_xy(testing_sample)
 
 assert(np.all(test_y == testing_sample["label"]))
 assert(np.all(test_X[:, 0] == testing_sample["titleLength"]))
-assert(np.all(np.isclose(test_X[:, 1], testing_sample["topic_affinity"])))
+assert(np.all(np.isclose(test_X[:, 7], testing_sample["reputation"])))
 test_y_hat = classification_pipeline.predict_proba(test_X)[:, 1]
 
 testing_sample["y_hat"] = test_y_hat
