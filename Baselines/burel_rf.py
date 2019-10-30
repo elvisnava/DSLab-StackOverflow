@@ -11,15 +11,17 @@ from utils import split_inds, mrr, shuffle_3
 # split such that the test set consists of completely different users: "user"
 # split randomly, such that test and train might contain question-answer pairs of the same user: "mixed"
 # split such that completly different users from a completely different time frame are selected: "time"
-SPLIT_MODE = "time"
+SPLIT_MODE = "user"
 SPLIT = 0.7
+train_data = "data" # "data_14_1-14_5" # "data/"
+test_data = "data_15_1-15_5" # "data_later"
 
 # Load data
 dataframes = []
-for file in os.listdir("data/"):
+for file in os.listdir(train_data):
     if file[0]=="." or "example" in file:
         continue
-    df_read = pd.read_csv(os.path.join("data",file), index_col="id")
+    df_read = pd.read_csv(os.path.join(train_data,file), index_col="id")
     # print("Successfully loaded ", file)
     dataframes.append(df_read)
 
@@ -58,10 +60,10 @@ elif SPLIT_MODE=="mixed":
 elif SPLIT_MODE=="time":
     df_train = pd.concat(dataframes)
     dataframes_test = []
-    for file in os.listdir("data_later/"):
+    for file in os.listdir(test_data):
         if file[0]=="." or "example" in file:
             continue
-        df_read = pd.read_csv(os.path.join("data_later",file), index_col="id")
+        df_read = pd.read_csv(os.path.join(test_data,file), index_col="id")
         # print("Successfully loaded ", file)
         dataframes_test.append(df_read)
     df_test = pd.concat(dataframes_test)
@@ -71,6 +73,9 @@ elif SPLIT_MODE=="time":
 else:
     print("ERROR: SPLIT MODE DOES NOT EXIST")
     sys.exit()
+
+uni, counts = np.unique(df_train.index, return_counts=True)
+# print(counts.tolist())
 
 # Prepare training set
 X_train = df_train.drop(['label', 'decision_time'], axis=1)
@@ -94,7 +99,7 @@ print("Class imbalance: 1:", class_counts[0]//class_counts[1])
 
 # Train RF
 X_train, Y_train, G_train = shuffle_3(X_train, Y_train, G_train)
-clf = RandomForestClassifier(n_estimators=100, max_depth=10, class_weight={0:1, 1:40})
+clf = RandomForestClassifier(n_estimators=100, max_depth=100, class_weight={0:1, 1:40})
 clf.fit(X_train,Y_train)
 
 # investigate features
@@ -108,12 +113,15 @@ print("Training MRR:", score)
 
 probs_test = clf.predict_proba(X_test)
 score, ranks = mrr(probs_test[:,1], G_test, Y_test)
-print("Testing MRR score:", score, " Average rank:", np.mean(list(ranks.values())))
+print("Testing MRR score:", score)
 
-df_test_gt = df_test[df_test["label"]==1]
-res_list = []
-for g in df_test_gt["decision_time"].values:
-    res_list.append(ranks[g])
-df_test_gt["rank"] = res_list
-print(df_test_gt.head(10))
+df_test_gt = df_test
+df_test_gt["rank"] = ranks.tolist()
+print(df_test_gt.head())
+# df_test_gt = df_test[df_test["label"]==1]
+# res_list = []
+# for g in df_test_gt["decision_time"].values:
+#     res_list.append(ranks[g])
+# df_test_gt["rank"] = res_list
+# print(df_test_gt.head(10))
 df_test_gt.to_csv("ranks_features.csv")
