@@ -150,6 +150,23 @@ def rows_left_not_in_right(left, right, on):
     assert(len(_overlap)==0)
     return values_left_not_in_right
 
+def set_partitions(left, right, on):
+    """
+    Given two dataframes with id columns (as specified by on keyword) as well as data columns this returns elements where the on
+    columns are in the left dataframe only, right dataframe only or in both dataframes. rows that are in both dataframes are returned
+    once with their data column values taken from the left and once with them taken from the right column
+
+    :param left: dataframe
+    :param right: dataframe
+    :param on: list of strings with all the columns that should be matched
+    :return: left_only, (both_with_left_values, both_with_right_values), right_only
+    """
+    all_column_names = list(left.columns)
+    assert(np.all(left.columns == right.columns))
+
+    df_all = left.merge(right, on=on, how="outer", indicator=True, suffixes=['_left', '_right'])
+    pass
+
 
 def get_closest_n(source_features, context_features, source_ids, context_ids, n, metric='cosine', allow_less=False):
     """

@@ -59,8 +59,8 @@ class TestUtils(unittest.TestCase):
 
     def test_left_not_in_right(self):
 
-        # make left array
 
+        # make left array
         a = np.random.randint(0, 5, 100).astype(float)
         b = np.random.randint(0, 5, 100).astype(float)
         c = + np.arange(100).astype(float) + 1
@@ -74,7 +74,6 @@ class TestUtils(unittest.TestCase):
 
 
         right = pd.DataFrame(data=dict(a=a2, b=b2, c=c2))
-
         # make sure there is some overlap
 
         overlap = left.merge(right, on=["a", "b"], how="inner")
@@ -97,6 +96,24 @@ class TestUtils(unittest.TestCase):
         # not all left elements should be contained. I use the c column of left as indicator
         self.assertFalse(np.all(np.isin(c, both.c.values)))
         pass
+
+    def test_pd_set_differences(self):
+        # make left array
+        a = np.random.randint(0, 5, 100).astype(float)
+        b = np.random.randint(0, 5, 100).astype(float)
+        c = + np.arange(100).astype(float) + 1
+
+        left = pd.DataFrame(data=dict(a=a, b=b, c=c))
+
+        # make right array
+        a2 = np.random.randint(0,10, 30).astype(float)
+        b2 = np.random.randint(0,10, 30).astype(float)
+        c2 = -np.arange(30).astype(float) -1
+
+
+        right = pd.DataFrame(data=dict(a=a2, b=b2, c=c2))
+
+        out = utils.set_partitions(left, right, on=["a", "b"])
 
 
 
