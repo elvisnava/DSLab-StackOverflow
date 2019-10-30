@@ -45,7 +45,7 @@ if __name__=="__main__":
 
     ##  Todo:
     # * The authors have one feature "Question Age" which is time passed since creation date
-    # * In the get_question_features function, one is missing:
+    # * In the get_question_features function, one feature is missing: The one computed with SentiWordNet
 
     # Simplification of query: only take first few posts
     # questions = data.query("SELECT Id, body FROM Posts WHERE PostTypeId=1 AND Id<100")
