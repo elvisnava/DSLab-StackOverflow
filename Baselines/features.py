@@ -199,7 +199,7 @@ class NumberOfEquationBlocks(_StatelessTransformer):
     def _transform(self, X, y=None):
         n_delim = X.str.count("\$\$")
 
-        assert(np.all(n_delim%1 ==0))
+        assert(np.all(n_delim%2 ==0))
 
         n_eq = n_delim //2
 
