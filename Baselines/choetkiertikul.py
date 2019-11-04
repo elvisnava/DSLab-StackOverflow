@@ -38,7 +38,7 @@ data_training.set_time_range(start=begin_training_date, end=end_training_date)
 
 data_testing = Data(verbose=0, tables_with_time_res=['Posts'])
 begin_testing_date = end_training_date + timedelta(days=1)
-end_testing_date = date(year=2016, month=1, day=31)
+end_testing_date = date(year=2016, month=6, day=30)
 data_testing.set_time_range(start=begin_training_date, end=end_testing_date)
 
 answer_threshold = None #10
@@ -223,7 +223,7 @@ else:
 
 classification_pipeline = Pipeline([('impute', SimpleImputer(strategy='constant', fill_value=0)),
                                     ('rf', RandomForestClassifier(n_estimators=150, min_samples_leaf=0.0003, n_jobs=1,
-                                                                  class_weight="balanced", max_depth=175))])
+                                                                  class_weight="balanced", max_depth=75))])
 
 def append_pair_features(df, pair_features_pipeline=pair_feature_pipeline):
     if pair_features_pipeline:
