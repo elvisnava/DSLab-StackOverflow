@@ -70,6 +70,9 @@ class Time_Binned_Features:
 
 
         bin_id = self._last_id_before(timepoint)
+
+        self.log("Using timebin {} - {}".format(self.bin_edges[bin_id], self.bin_edges[bin_id +1]), priority=2)
+
         return self._binned_features[bin_id]
 
 

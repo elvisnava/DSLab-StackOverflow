@@ -5,6 +5,35 @@ import pandas as pd
 from functools import reduce
 
 from data_utils import Time_Binned_Features, make_datetime
+from choetkiertikul_helpers import *
+
+from sklearn.pipeline import Pipeline, make_pipeline
+from pipeline_utils import NamedColumnTransformer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_validate, GridSearchCV
+import scipy.spatial
+import sklearn.metrics
+from functools import reduce
+
+
+# from lda import LDA
+from features import LDAWrapper as LDA
+
+import numpy as np
+from datetime import date
+from datetime import timedelta
+import re
+
+
+from data import Data
+from features import AppendArgmax
+import features
+import utils
+import pandas as pd
+import time
 
 
 
@@ -14,51 +43,64 @@ testing_questions_start_time = make_datetime("01.06.2016 00:02")
 testing_questions_end_time = make_datetime("31.12.2016 23:59")
 
 n_feature_time_bins = 5
+cache_dir = "../cache/"
 
 
-def get_user_data(db_access):
-    date_now =  db_access.end
 
-    date_string = str(date_now)
-
-    basic_user_data = db_access.query("SELECT Id as User_Id, CreationDate, Reputation, UpVotes, DownVotes, date '{}' - CreationDate AS PlattformAge from Users ORDER BY Id".format(date_string)).set_index("user_id", drop=False)
-
-    n_question_for_user = db_access.query("SELECT OwnerUserId as User_Id, count(Posts.Id) as NumberQuestions from Posts where OwnerUserId IS NOT NULL AND Posts.PostTypeId = {questionPostType} GROUP BY OwnerUserId ORDER BY OwnerUserId ", use_macros=True).set_index("user_id")
-    n_answers_for_user = db_access.query("SELECT OwnerUserId as User_Id, count(Posts.Id) as  NumberAnswers from Posts where OwnerUserId IS NOT NULL AND Posts.PostTypeId = {answerPostType} GROUP BY OwnerUserId ORDER BY OwnerUserId ", use_macros=True).set_index("user_id")
-
-    n_accepted_answers_query = """SELECT A.OwnerUserId as User_Id, count(A.Id) as NumberAcceptedAnswers from Posts Q LEFT JOIN Posts A on Q.AcceptedAnswerId = A.Id WHERE Q.AcceptedAnswerId IS NOT NULL AND A.OwnerUserId IS NOT NULL GROUP BY A.OwnerUserId ORDER BY A.OwnerUserId"""
-
-    n_accepted_answers = db_access.query(n_accepted_answers_query).set_index("user_id")
-
-    user_tags = (db_access.get_user_tags()[["user_id", "user_tags"]]).set_index("user_id")
-
-    all_data_sources = [basic_user_data, n_question_for_user, n_answers_for_user, n_accepted_answers, user_tags]
-    final = reduce(lambda a,b: a.join(b), all_data_sources)
-
-    return final
 
 db_access = Data(verbose=3)
 
 user_features = Time_Binned_Features(db_access=db_access, gen_features_func=get_user_data, start_time=training_questions_start_time, end_time=testing_questions_end_time, n_bins=n_feature_time_bins, verbose=1)
 
-u1 = user_features[datetime(year=2015, month=3, day=2)]
-u2 = user_features["20.11.2016 13:03"]
-
-
-
 # define times
 # fit LDA
-# training questions
-# testing questions
-# number of user feature buckets
 
+################################
+# Pipelines
+################################
 
+lda_pipeline = Pipeline([ ## start text pipline
+    ("remove_html", features.RemoveHtmlTags()),
+    ("replace_numbers", features.ReplaceNumbers()),
+    ("unpack", FunctionTransformer(np.squeeze, validate=False)), # this is necessary cause the vectorizer does not expect 2d data
+    ("vectorize", CountVectorizer(stop_words='english')),
+    ("lda",  LDA(n_topics=10, n_iter=10000, random_state=2342)),
+    ("prevalent_topic", AppendArgmax())],
+    memory=cache_dir+"lda", verbose=True)
 
+readability_pipeline = Pipeline(
+        [('removeHTML', features.RemoveHtmlTags()),
+         ('fog', features.ReadabilityIndexes(['GunningFogIndex'], memory=cache_dir+"readability"))]
+         , verbose=True) # caching obviously doesn't help as training is not expensive
 
+question_feature_pipeline = NamedColumnTransformer([
+    ('question_id', FunctionTransformer(lambda x: x[:, None], validate=False), "question_id"),
+    ('topic[10],prevalent_topic', lda_pipeline, "body"), #end text pipeline
+    ('titleLength', features.LengthOfText(), 'title'),
+    ('questionLength', Pipeline([('remove_html', features.RemoveHtmlTags()), ('BodyLength', features.LengthOfText())]), 'body'),
+    ('nCodeBlocks', features.NumberOfCodeBlocks(), 'body'),
+    ('nEquationBlocks', features.NumberOfEquationBlocks(), 'body'),
+    ('nExternalLinks', features.NumberOfLinks(), 'body'),
+    ('nTags', features.CountStringOccurences('<'), 'tags'),
+    ('question_tags', FunctionTransformer(lambda x: x[:, None], validate=False), "tags"),
+    ('readability', readability_pipeline,  'body')
+]) # end Column transformer
 
+###################################
+# Fit the LDA
+###################################
 
+db_access.set_time_range(start=None, end=training_questions_start_time)
+posts_for_fitting_lda = db_access.query("SELECT Id as Question_Id, Title, Body, Tags FROM Posts WHERE PostTypeId = {questionPostType} OR PostTypeId = {answerPostType}", use_macros=True) # we use both questions and answers to fit the lda
 
-# compute user features in thesse buckets
+question_feature_pipeline.fit(posts_for_fitting_lda)
+
+################################
+# Compute Question Features Training Data
+################################
+db_access.set_time_range(start=None, end=testing_questions_end_time)
+all_questions = db_access.query("SELECT Id as Question_Id, Title, Body, Tags, CreationDate as question_date FROM Posts WHERE PostTypeID = {questionPostType}", use_macros=True)
+
 
 
 

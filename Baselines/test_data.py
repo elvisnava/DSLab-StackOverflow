@@ -1,6 +1,7 @@
 import unittest
 import data
 from datetime import date
+from data_utils import make_datetime
 import numpy as np
 
 class Test_Data(unittest.TestCase):
@@ -42,6 +43,27 @@ class Test_Data(unittest.TestCase):
         check("SELECT OwnerUserId as UserId, count(Posts.Id) from Posts where Posts.PostTypeId = 2 GROUP BY OwnerUserId",
               "SELECT OwnerUserId as UserId, count(InTimewindow_Posts.Id) from InTimewindow_Posts where InTimewindow_Posts.PostTypeId = 2 GROUP BY OwnerUserId")
 
+    def test_get_answerers_strategy(self):
+        question_list = [101274]
+        only_accepted = data.GetAnswerersStrategy(votes_threshold=None, verbose=3)
+
+        all = data.GetAnswerersStrategy(votes_threshold=5, verbose=3)
+
+        accepted_answer = only_accepted.get_answers_list(question_list)
+        self.assertTrue(len(accepted_answer)==1)
+
+        all_answers = all.get_answers_list(question_list)
+        self.assertEqual(len(all_answers), 3)
+        pass
+        print("start 2")
+        all_answers_before = all.get_answers_list(question_list, before_timepoint=make_datetime("01.01.2018 12:00"))
+        self.assertEqual(len(all_answers_before), 2)
+
+
+        all_answers_two_questions = all.get_answers_list(question_list + [173621], make_datetime("01.01.2018 12:00"))
+        self.assertEqual(len(all_answers_two_questions), 4)
+        pass
+
 
     def test_temp_table_string(self):
         s = self.data.get_temp_tables_string()
@@ -51,10 +73,10 @@ class Test_Data(unittest.TestCase):
         a = date(year=2012, month=5, day=23)
         b = date(year=2015, month=1, day=12)
         out_string = self.data._time_range_condition_string(start=a, end=b)
-        self.assertEqual("CreationDate >= date '2012-05-23' AND CreationDate <= date '2015-01-12'", out_string)
+        self.assertEqual("WHERE CreationDate >= date '2012-05-23' AND CreationDate <= date '2015-01-12'", out_string)
 
         out_string2 = self.data._time_range_condition_string(end=b)
-        self.assertEqual("CreationDate <= date '2015-01-12'", out_string2)
+        self.assertEqual("WHERE CreationDate <= date '2015-01-12'", out_string2)
 
 
     def test_get_questions(self):

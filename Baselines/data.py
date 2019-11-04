@@ -37,18 +37,6 @@ class Data:
             drop_command = "DROP VIEW IF EXISTS {};".format(viewname)
             self.execute_command(drop_command)
 
-
-    def create_time_range_views(self, start, end):
-        raise DeprecationWarning("Dont use this")
-        self.drop_timewindow_views()
-
-        time_range_condition = self._time_range_condition_string(start=start, end=end)
-
-        for raw_tablename in self.table_names_that_need_timerestrictions:
-            viewname = self.time_window_view_template.format(raw_tablename)
-            command = "CREATE VIEW {} AS SELECT * FROM {} WHERE {}".format(viewname, raw_tablename, time_range_condition)
-            self.execute_command(command)
-
     def get_temp_tables_string(self, raw_tablenames = None):
         if raw_tablenames is None:
             raw_tablenames = self.table_names_that_need_timerestrictions
@@ -60,7 +48,7 @@ class Data:
         collector = list()
         for raw_tablename in raw_tablenames:
             viewname = self.time_window_view_template.format(raw_tablename)
-            temp_table = " {} AS (SELECT * FROM {} WHERE {})".format(viewname, raw_tablename, time_range_condition)
+            temp_table = " {} AS (SELECT * FROM {} {})".format(viewname, raw_tablename, time_range_condition)
             collector.append(temp_table)
 
         all_views = "WITH " + " ,".join(collector) + " "
@@ -84,6 +72,10 @@ class Data:
         res = self.cnx.execute(command)
         return res
 
+    def log(self, string, level):
+        if level <= self.verbose:
+            print(string)
+
     def query(self, query_str, use_macros=False):
         """
         Run a custom query but Posts,Users,Votes tables will be restricted to contain rows created within the time intervall set in set_time_range
@@ -93,7 +85,7 @@ class Data:
         :return:
         """
         if self.start is None and self.end is None:
-            raise ValueError("you first have to set a timerange with set_time_range")
+            self.log("Taking all available data without timerestritionc!!", level=-1)
 
         if use_macros:
             query_str = query_str.format(**self.macro_dict)
@@ -134,7 +126,8 @@ class Data:
 
     def _time_range_condition_string(self, start=None, end=None, time_variable_name="CreationDate"):
         if start is None and end is None:
-            raise ValueError("in _time_range_condition_string at least one of start or end date has to be provided")
+            # raise ValueError("in _time_range_condition_string at least one of start or end date has to be provided")
+            return ""
 
         conds = list()
         if start:
@@ -142,7 +135,7 @@ class Data:
         if end:
             conds.append("{} <= date '{}'".format(time_variable_name, end))
 
-        return " AND ".join(conds)
+        return "WHERE " + (" AND ".join(conds))
 
     def create_date_indices(self, time_variable_name="CreationDate"):
 
@@ -163,10 +156,6 @@ class Data:
         pass
 
 
-
-    def _clean_html(self, raw_html):
-        cleantext = re.sub(r'<.*?>', '', raw_html)
-        return cleantext
 
 
     def get_answer_for_question(self, threshold=None):
@@ -238,3 +227,42 @@ class Data:
         both.user_id = pd.to_numeric(both.user_id)
 
         return both
+
+
+class GetAnswerersStrategy:
+    # an instance to get answerers to questions
+
+    # answerer users for ids (sets)
+    def __init__(self, votes_threshold=None, db_access = None, verbose=0):
+        self.votes_threshold = votes_threshold
+        if db_access is None:
+            self.db_access = Data(verbose=verbose)
+        else:
+            self.db_access = db_access
+
+    def get_answerers_set(self, question_ids, before_timepoint=None):
+        # all users that answered any of the question_ids
+        pass
+
+    def get_answers_list(self, question_ids, before_timepoint=None):
+        if self.votes_threshold is None:
+            #we only take accepted answers
+            additional_cond = ""
+        else:
+            additional_cond = " OR A.Score >= {}".format(self.votes_threshold)
+
+        self.db_access.set_time_range(start=None, end=before_timepoint)
+
+
+        q  = """
+        SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id
+        FROM Posts A INNER JOIN Posts Q on A.ParentId = Q.Id
+        WHERE A.ParentId IN {question_id_list}  AND (Q.AcceptedAnswerId = A.Id {additional_cond})
+        """.format(question_id_list = sql_formatl_list(question_ids), additional_cond=additional_cond)
+
+        result = self.db_access.query(q)
+        return result
+
+
+def sql_formatl_list(l):
+    return "({})".format(", ".join([str(int(i)) for i in l]))
