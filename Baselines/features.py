@@ -237,7 +237,40 @@ class CountStringOccurences(_StatelessTransformer):
     def _transform(self, X, y=None):
         return X.str.count(self.pattern)
 
+class Reputation(_StatelessTransformer):
 
+    def __init__(self, max_date, data):
+        super().__init__(require_pandas=True)
+        self.max_date = max_date
+        self.data = data
+
+    def compute_factor(self, row):
+        if row["posttypeid"]==1 and row["votetypeid"]==2: # upvoted question
+            factor = 5
+        elif row["posttypeid"]==1 and row["votetypeid"]==3: # downvoted question
+            factor = -5
+        elif row["posttypeid"]==2 and row["votetypeid"]==2: # upvoted answer
+            factor = 10
+        elif row["posttypeid"]==2 and row["votetypeid"]==3: # downvoted anser
+            factor = -10
+        elif row["posttypeid"]==2 and row["votetypeid"]==1: # accepted answer
+            factor = 15
+        elif row["votetypeid"]==8:
+            factor = row["bountyamount"]
+        else:
+            factor = 0
+        res = factor*row["postid"]
+        return res
+
+    def transform(self, X, y=None):
+
+        reputation = self.data.query("SELECT * FROM Votes LEFT JOIN (SELECT Id, PostTypeId, OwnerUserId FROM Posts) b ON Votes.Id=b.Id WHERE CreationDate<'{}'".format(str(self.max_date)))
+        grouped = reputation.groupby(["owneruserid", "posttypeid", "votetypeid"]).agg({"postid": "count", "bountyamount":"sum"})
+        grouped = grouped.reset_index()
+        grouped["score"] = grouped.apply(self.compute_factor, axis=1)
+        out = grouped.groupby(["owneruserid"]).agg({"score":"sum"}).reset_index()
+        merged = pd.merge(X, out, on="owneruserid", how="left")
+        return merged
 
 
 # class Feature:
