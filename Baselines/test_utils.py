@@ -95,7 +95,20 @@ class TestUtils(unittest.TestCase):
 
         # not all left elements should be contained. I use the c column of left as indicator
         self.assertFalse(np.all(np.isin(c, both.c.values)))
+
         pass
+
+    def test_set_differences(self):
+        left = set([10, 11,4, 12, 13, 14, 1, 15])
+        right = set([22,1 ,23,26,4,27,29])
+
+        left_only, intersection, right_only = utils.set_partitions(left, right)
+
+        self.assertEqual(left_only , set([10,11, 12,13,14,15]))
+        self.assertEqual(right_only, set([22,23,26,27,29]))
+        self.assertEqual(intersection, set([1,4]))
+        pass
+
 
     def test_pd_set_differences(self):
         # make left array

@@ -1,12 +1,16 @@
 from functools import reduce
+import numpy as np
+import utils
+import pandas as pd
 
 
 def get_user_data(db_access):
+    #TODO compute upvotes, downvotes, reputation dynamically
     date_now =  db_access.end
 
     date_string = str(date_now)
 
-    basic_user_data = db_access.query("SELECT Id as User_Id, CreationDate, Reputation, UpVotes, DownVotes, date '{}' - CreationDate AS PlattformAge from Users ORDER BY Id".format(date_string)).set_index("user_id", drop=False)
+    basic_user_data = db_access.query("SELECT Id as User_Id, CreationDate, Reputation, date '{}' - CreationDate AS PlattformAge from Users ORDER BY Id".format(date_string)).set_index("user_id", drop=False)
 
     n_question_for_user = db_access.query("SELECT OwnerUserId as User_Id, count(Posts.Id) as NumberQuestions from Posts where OwnerUserId IS NOT NULL AND Posts.PostTypeId = {questionPostType} GROUP BY OwnerUserId ORDER BY OwnerUserId ", use_macros=True).set_index("user_id")
     n_answers_for_user = db_access.query("SELECT OwnerUserId as User_Id, count(Posts.Id) as  NumberAnswers from Posts where OwnerUserId IS NOT NULL AND Posts.PostTypeId = {answerPostType} GROUP BY OwnerUserId ORDER BY OwnerUserId ", use_macros=True).set_index("user_id")
@@ -15,22 +19,99 @@ def get_user_data(db_access):
 
     n_accepted_answers = db_access.query(n_accepted_answers_query).set_index("user_id")
 
+    query_votes = """SELECT P.OwnerUserId as user_id, sum((V.VoteTypeId = 2)::int) as upvotes, sum((V.VoteTypeId=3)::int) as downvotes
+        FROM Votes as V join Posts P on V.PostId = P.Id 
+        GROUP BY P.OwnerUserId
+    """
+    votes = db_access.query(query_votes).set_index("user_id")
+
     user_tags = (db_access.get_user_tags()[["user_id", "user_tags"]]).set_index("user_id")
 
-    all_data_sources = [basic_user_data, n_question_for_user, n_answers_for_user, n_accepted_answers, user_tags]
+    all_data_sources = [basic_user_data, n_question_for_user, n_answers_for_user, n_accepted_answers, user_tags, votes]
     final = reduce(lambda a,b: a.join(b), all_data_sources)
 
     return final
 
 
-def make_pairs(question_stream,
-               question_features_to_use_for_similarity,
-               question_start_time,
-               group_column_name,
-               db_access
+def make_pairs(question_stream, # dataframe with all questions (including testing)
+               question_features_to_use_for_similarity, # name of columns to use for similarity
+               question_start_time, # question
+               group_column_name, # name of in this case topic column
+               answerers_strategy,
+               n_candidate_questions,
+               user_features #  a Time_Binned_Features instance
                ):
-    # TODO
-    # make sure questions are sorted by date
+    stats = dict(ignored_questions = 0, used_questions = 0, manually_added_users_unkown_at_last_intervall=0)
+    print("Starting make pairs")
+
+    sorted_ids = question_stream.creationdate.argsort()
+
+    assert(np.all(sorted_ids == np.arange(len(question_stream))))
+
+    id_of_first_question = question_stream.creationdate.searchsorted(question_start_time)
+
+    assert(question_stream.creationdate[id_of_first_question] >= question_start_time)
+
+    collector = list()
+
+    for id in range(id_of_first_question, len(question_stream)):
+
+        current_target_question = question_stream.iloc[id]
+        actuall_answerers = answerers_strategy.get_answerers_set(question_ids=[current_target_question.question_id], before_timepoint=None)
+        if len(actuall_answerers) == 0:
+            stats['ignored_questions'] += 1
+            continue
+
+
+        context_questions = question_stream.iloc[:(id-1), :]
+
+        assert(current_target_question.question_id not in list(context_questions.question_id))
+
+        target_group_id = current_target_question[group_column_name]
+        context_questions_in_group = context_questions[context_questions[group_column_name] == target_group_id]
+
+        target_question_featues = np.array(current_target_question[question_features_to_use_for_similarity].values)[None, :]
+        # TODO at the mmoment we take all similar questions (i.e. also unanswered ones)
+        context_questions_features = context_questions_in_group[question_features_to_use_for_similarity].values
+        closest_ids = np.squeeze(utils.get_closest_n(source_features=target_question_featues, context_features=context_questions_features, n=n_candidate_questions))
+
+        selected_context_questions = context_questions_in_group.iloc[closest_ids]
+
+        answerer_users_candidates = answerers_strategy.get_answerers_set(question_ids=selected_context_questions.question_id, before_timepoint=current_target_question.creationdate)
+
+        incorrectly_picked_candidates, correctly_picked_candidates, manually_added_cadidates = utils.set_partitions(answerer_users_candidates, actuall_answerers)
+        all_answerers = list(incorrectly_picked_candidates) + list(correctly_picked_candidates) + list(manually_added_cadidates)
+        type_of_answerer = (['incorrect_pick']*len(incorrectly_picked_candidates)) + (['correct_pick']*len(correctly_picked_candidates)) + (['manually_added']*len(manually_added_cadidates))
+        df_dict = dict(answerer_id = all_answerers, type_of_answerer=type_of_answerer)
+        df_dict.update(dict(current_target_question))
+        df_dict['user_features_age'] = user_features.age(current_target_question.creationdate)
+        question_with_answerers = pd.DataFrame(df_dict)
+
+        # Now get the actuall features of the answerers
+        all_user_features_this_time = user_features[current_target_question.creationdate]
+
+        answerer_features_this_time = all_user_features_this_time.loc[all_answerers, :]
+
+        if not np.all(np.isin(all_answerers, all_user_features_this_time.index)):
+            stats['manually_added_users_unkown_at_last_intervall'] += 1
+
+
+        finished_pairs = question_with_answerers.merge(answerer_features_this_time, left_on="answerer_id", right_index=True, suffixes=("_question", "_user"), how="left")
+        collector.append(finished_pairs)
+
+        stats['used_questions'] += 1
+
+        if stats['used_questions'] >= 20:
+            break
+
+
+    all_samples = pd.concat(collector, axis=0)
+
+    print("Making Pairs fun facts : {}".format(stats))
+
+    return all_samples
+
+
 
     # go through questions in tern
     # take all questions before/above the current one
@@ -39,3 +120,22 @@ def make_pairs(question_stream,
     # get all answerers according to strategy
 
     # get actuall answerer
+
+
+def dataframe_to_xy(df, feature_cols):
+    y = df["label"].values
+
+    # df["noisy_label"] = y.astype(float) + 0.1 * np.random.rand(len(y))
+    # _feature_cols = feature_cols + ["noisy_label"]
+    # print("WARN >> added noisy label")
+
+    actuall_cols = set(df.columns)
+    assert(len(set(feature_cols) - actuall_cols)==0)
+    cols_that_didnt_get_picked = actuall_cols - set(feature_cols)
+
+    print("Used features: {}".format(feature_cols))
+    print("Columns that didn't get picked {}".format(cols_that_didnt_get_picked))
+
+    X = df[feature_cols].values.astype(float)
+    X = X.astype(float)
+    return X, y

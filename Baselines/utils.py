@@ -150,7 +150,16 @@ def rows_left_not_in_right(left, right, on):
     assert(len(_overlap)==0)
     return values_left_not_in_right
 
-def set_partitions(left, right, on):
+
+def set_partitions(left, right):
+    left_only = left-right
+    right_only = right-left
+    intersection = left & right
+
+    assert(sorted(list(left|right))== sorted(list(left_only)+list(right_only)+list(intersection)))
+    return (left_only, intersection, right_only)
+
+def df_set_partitions(left, right, on):
     """
     Given two dataframes with id columns (as specified by on keyword) as well as data columns this returns elements where the on
     columns are in the left dataframe only, right dataframe only or in both dataframes. rows that are in both dataframes are returned
@@ -161,6 +170,7 @@ def set_partitions(left, right, on):
     :param on: list of strings with all the columns that should be matched
     :return: left_only, (both_with_left_values, both_with_right_values), right_only
     """
+    raise NotImplementedError("not done")
     all_column_names = list(left.columns)
     assert(np.all(left.columns == right.columns))
 
@@ -168,7 +178,7 @@ def set_partitions(left, right, on):
     pass
 
 
-def get_closest_n(source_features, context_features, source_ids, context_ids, n, metric='cosine', allow_less=False):
+def get_closest_n(source_features, context_features, n, source_ids=None, context_ids=None, metric='cosine', allow_less=False):
     """
     For each source point (with source_features and source_id) find the ids of the n closest context points.
     However if the context points contain the same point as the source point (as identified by matching source_id and context_id)
@@ -177,19 +187,26 @@ def get_closest_n(source_features, context_features, source_ids, context_ids, n,
 
     :param source_features: n_source x n_features numpy array
     :param context_features: n_context x n_features numpy array
-    :param source_ids : n_source numpy array with indices
-    :param context_ids: n_context numpy array with indices
+    :param source_ids : n_source numpy array with indices, if None assume source_ids are all different then context_ids
+    :param context_ids: n_context numpy array with indices, if None assume context_ids = np.arange(0, len(context_features)
     :return: a numpy array of shape len(source_ids) x n || for each source sample the ids (in context_ids) of the samples with the minimal distance to the source example
     """
+    if context_ids is None:
+        context_ids = np.arange(0, len(context_features))
 
 
     distances = scipy.spatial.distance.cdist(source_features, context_features, metric=metric) # output is n_source x n_context
 
-    is_same_id = source_ids[:, None] == context_ids[None, :]
+    if source_ids is not None:
+        # else we assume the source set is different from the context set of points
+        is_same_id = source_ids[:, None] == context_ids[None, :]
 
-    distances[is_same_id] = np.inf
+        distances[is_same_id] = np.inf
 
-    n_available = len(context_features) - np.any(is_same_id) # if the context contains the source we can't take them
+        n_available = len(context_features) - np.any(is_same_id) # if the context contains the source we can't take them
+    else:
+        n_available = len(context_features)
+
 
     if n_available < n:
         if allow_less:

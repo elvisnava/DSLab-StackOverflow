@@ -1,5 +1,6 @@
 from data import Data
 from datetime import datetime
+import pickle
 
 import pandas as pd
 from functools import reduce
@@ -17,6 +18,7 @@ from sklearn.model_selection import cross_validate, GridSearchCV
 import scipy.spatial
 import sklearn.metrics
 from functools import reduce
+import os
 
 
 # from lda import LDA
@@ -28,12 +30,13 @@ from datetime import timedelta
 import re
 
 
-from data import Data
+from data import Data, GetAnswerersStrategy
 from features import AppendArgmax
 import features
 import utils
 import pandas as pd
 import time
+
 
 
 
@@ -43,14 +46,20 @@ testing_questions_start_time = make_datetime("01.06.2016 00:02")
 testing_questions_end_time = make_datetime("31.12.2016 23:59")
 
 n_feature_time_bins = 5
+
+n_candidate_questions = 30
+votes_threshold_for_answerers = 3
+
 cache_dir = "../cache/"
 
+load_question_features = True
+load_user_features = False
+load_final_pairs = True
 
+raw_question_features_path = os.path.join(cache_dir, "raw_question_features.pickle")
+binned_user_features_path = os.path.join(cache_dir, "binned_user_features.pickle")
+all_pairs_path = os.path.join(cache_dir, "final_candidates_pairs.pickle")
 
-
-db_access = Data(verbose=3)
-
-user_features = Time_Binned_Features(db_access=db_access, gen_features_func=get_user_data, start_time=training_questions_start_time, end_time=testing_questions_end_time, n_bins=n_feature_time_bins, verbose=1)
 
 # define times
 # fit LDA
@@ -71,44 +80,80 @@ lda_pipeline = Pipeline([ ## start text pipline
 readability_pipeline = Pipeline(
         [('removeHTML', features.RemoveHtmlTags()),
          ('fog', features.ReadabilityIndexes(['GunningFogIndex'], memory=cache_dir+"readability"))]
-         , verbose=True) # caching obviously doesn't help as training is not expensive
+         , verbose=True) # the ReadabilityFeature itself caches it's transform method now
 
 question_feature_pipeline = NamedColumnTransformer([
-    ('question_id', FunctionTransformer(lambda x: x[:, None], validate=False), "question_id"),
+    ('question_id', None,  "question_id"),
     ('topic[10],prevalent_topic', lda_pipeline, "body"), #end text pipeline
     ('titleLength', features.LengthOfText(), 'title'),
     ('questionLength', Pipeline([('remove_html', features.RemoveHtmlTags()), ('BodyLength', features.LengthOfText())]), 'body'),
     ('nCodeBlocks', features.NumberOfCodeBlocks(), 'body'),
     ('nEquationBlocks', features.NumberOfEquationBlocks(), 'body'),
     ('nExternalLinks', features.NumberOfLinks(), 'body'),
-    ('nTags', features.CountStringOccurences('<'), 'tags'),
-    ('question_tags', FunctionTransformer(lambda x: x[:, None], validate=False), "tags"),
-    ('readability', readability_pipeline,  'body')
+    ('nTags', features.CountStringOccurences('<'), 'question_tags'),
+    ('question_tags', None,  "question_tags"),
+    ('readability', readability_pipeline,  'body'),
+    ('creationdate', None, 'creationdate')
 ]) # end Column transformer
+
+############
+# Now do data stuff
+#############
+
+db_access = Data(verbose=3)
+
+if load_user_features:
+    with open(binned_user_features_path, "rb") as f:
+        binned_user_features= pickle.load(f)
+else:
+    binned_user_features = Time_Binned_Features(gen_features_func=get_user_data, start_time=training_questions_start_time, end_time=testing_questions_end_time, n_bins=n_feature_time_bins, verbose=1)
+
+    with open(binned_user_features_path, "wb") as f:
+        pickle.dump(binned_user_features, f)
 
 ###################################
 # Fit the LDA
 ###################################
 
-db_access.set_time_range(start=None, end=training_questions_start_time)
-posts_for_fitting_lda = db_access.query("SELECT Id as Question_Id, Title, Body, Tags FROM Posts WHERE PostTypeId = {questionPostType} OR PostTypeId = {answerPostType}", use_macros=True) # we use both questions and answers to fit the lda
 
-question_feature_pipeline.fit(posts_for_fitting_lda)
+if load_question_features:
+    all_questions_features = pd.read_pickle(raw_question_features_path)
+else:
+    db_access.set_time_range(start=None, end=training_questions_start_time)
+    posts_for_fitting_lda = db_access.query("SELECT Id as Question_Id, Title, Body, Tags as question_tags, CreationDate FROM Posts WHERE PostTypeId = {questionPostType}", use_macros=True) # we use both questions and answers to fit the lda
 
-################################
-# Compute Question Features Training Data
-################################
-db_access.set_time_range(start=None, end=testing_questions_end_time)
-all_questions = db_access.query("SELECT Id as Question_Id, Title, Body, Tags, CreationDate as question_date FROM Posts WHERE PostTypeID = {questionPostType}", use_macros=True)
+    question_feature_pipeline.fit(posts_for_fitting_lda)
 
 
 
+    ################################
+    # Compute Question Features Training Data
+    ################################
+    db_access.set_time_range(start=None, end=testing_questions_end_time)
+    all_questions = db_access.query("SELECT Id as Question_Id, Title, Body, Tags as question_tags, CreationDate FROM Posts WHERE PostTypeID = {questionPostType}", use_macros=True)
+    # I could prefilter here to only take answered questions -> save computation
+
+    # subs = question_feature_pipeline.transform_df(all_questions[:100])
+
+    all_questions_features = question_feature_pipeline.transform_df(all_questions)
+
+    all_questions_features.to_pickle(raw_question_features_path)
 
 
-# compute question features global (double check)
-# fit on LDA fit questions
+if load_final_pairs:
+    all_pairs = pd.read_pickle(all_pairs_path)
+else:
+    features_cols_for_similarity = ["titleLength", "questionLength", "nCodeBlocks", "nEquationBlocks", "nExternalLinks", "nTags", "readability"]
+    all_pairs = make_pairs(all_questions_features, question_features_to_use_for_similarity=features_cols_for_similarity,
+                           question_start_time=training_questions_start_time,
+                           group_column_name='prevalent_topic', answerers_strategy=GetAnswerersStrategy(votes_threshold=votes_threshold_for_answerers, verbose=0),
+                           n_candidate_questions=n_candidate_questions, user_features=binned_user_features)
 
+    pd.to_pickle(all_pairs, all_pairs_path)
 
 
 # go through questions and get users. (all or just best answer)
 # get and make the pairs, annotate where they come from
+
+
+training_pairs = all_pairs

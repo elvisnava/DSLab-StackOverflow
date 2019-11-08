@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+import numpy as np
 import pandas as pd
 import re
 
@@ -85,7 +86,7 @@ class Data:
         :return:
         """
         if self.start is None and self.end is None:
-            self.log("Taking all available data without timerestritionc!!", level=-1)
+            self.log("Taking all available data without timerestritionc!!", level=1)
 
         if use_macros:
             query_str = query_str.format(**self.macro_dict)
@@ -233,16 +234,23 @@ class GetAnswerersStrategy:
     # an instance to get answerers to questions
 
     # answerer users for ids (sets)
-    def __init__(self, votes_threshold=None, db_access = None, verbose=0):
+    def __init__(self, votes_threshold=None, _db_access = None, verbose=0):
         self.votes_threshold = votes_threshold
-        if db_access is None:
+        if _db_access is None:
             self.db_access = Data(verbose=verbose)
         else:
-            self.db_access = db_access
+            self.db_access = _db_access
 
     def get_answerers_set(self, question_ids, before_timepoint=None):
         # all users that answered any of the question_ids
-        pass
+        _answerers_list = self.get_answers_list(question_ids, before_timepoint)
+        if len(_answerers_list) == 0:
+            return set()
+
+        answerer_list = _answerers_list[np.isfinite(_answerers_list.answerer_user_id.values)]
+
+        answerers_set = set(answerer_list.answerer_user_id)# we get nans for questions that were not answered
+        return answerers_set
 
     def get_answers_list(self, question_ids, before_timepoint=None):
         if self.votes_threshold is None:

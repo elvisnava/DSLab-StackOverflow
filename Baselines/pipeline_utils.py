@@ -1,9 +1,10 @@
 from sklearn.compose import ColumnTransformer
 import pandas as pd
 from lda import LDA
+import numpy as np
 
 class NamedColumnTransformer(ColumnTransformer):
-    def __init__(self, transformers, remainder="drop", sparse_threshold=0.3, n_jobs=None, transformer_weights=None, verbose=False):
+    def __init__(self, transformers, sparse_threshold=0.3, n_jobs=None, transformer_weights=None, verbose=False):
         """
 
         :param transformers: a list with each element (output_columns_identifier, Pipeline, name_of_column_to_acct_on)
@@ -16,9 +17,15 @@ class NamedColumnTransformer(ColumnTransformer):
         :param transformer_weights:
         :param verbose:
         """
-        super().__init__(transformers, remainder=remainder, sparse_threshold=sparse_threshold, n_jobs=n_jobs, transformer_weights=transformer_weights, verbose=verbose)
+        nonzero_steps = [t for t in transformers if t[1] is not None]
+        super().__init__(nonzero_steps, remainder='drop', sparse_threshold=sparse_threshold, n_jobs=n_jobs, transformer_weights=transformer_weights, verbose=verbose)
 
-        self.raw_transformer_names = [t[0] for t in transformers]
+        _passthrough_column_names, is_same = zip(*list([(t[0], t[0]==t[2]) for t in transformers if t[1] is None]))
+        assert(np.all(is_same))
+
+        self.passthrough_column_names = list(_passthrough_column_names)
+
+        self.raw_transformer_names = [t[0] for t in nonzero_steps]
         self.final_column_names = self.get_final_column_names(self.raw_transformer_names)
 
 
@@ -40,10 +47,25 @@ class NamedColumnTransformer(ColumnTransformer):
         return result
 
     def transform_df(self, X):
+        passthrough_columns = X[self.passthrough_column_names]
+        actually_transformed = self._transform_df(X)
+        return pd.concat([passthrough_columns, actually_transformed], axis=1)
+
+
+    def _transform_df(self, X):
+        # drops columns with None transfomer
         out = self.transform(X)
         return self.np_array2dataframe(out)
 
     def fit_transform_df(self, X, y=None):
+        passthrough_columns = X[self.passthrough_column_names]
+
+        actually_transformed = self._fit_transform(X, y)
+
+        return pd.concat([passthrough_columns, actually_transformed], axis=1)
+
+    def _fit_transform_df(self, X, y=None):
+        # i.e. this drops the columns with None transformers
         assert(y is None)
         out = self.fit_transform(X)
         return self.np_array2dataframe(out)

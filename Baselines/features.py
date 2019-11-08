@@ -7,6 +7,8 @@ import re
 import readability
 from lda import LDA
 import joblib
+from sklearn.preprocessing import FunctionTransformer
+
 
 class AppendArgmax(BaseEstimator, TransformerMixin):
 
@@ -65,6 +67,11 @@ class TopicAffinity(BaseEstimator, TransformerMixin):
             out[i, 0] = prod
 
         return out
+
+def make_identity_transformer():
+    return FunctionTransformer(lambda x: x[:, None], validate=False)
+
+
 
 class ReadabilityIndexes(BaseEstimator, TransformerMixin):
     @staticmethod
@@ -133,6 +140,13 @@ class _StatelessTransformer(BaseEstimator, TransformerMixin):
         else:
             return out
 
+class IdentityTransformer(_StatelessTransformer):
+    def __init__(self):
+        super().__init__()
+
+    def _transform(self, X, y=None):
+        return X
+
 class RemoveHtmlTags(_StatelessTransformer):
     @staticmethod
     def clean_html(raw_html):
@@ -199,7 +213,8 @@ class NumberOfEquationBlocks(_StatelessTransformer):
     def _transform(self, X, y=None):
         n_delim = X.str.count("\$\$")
 
-        assert(np.all(n_delim%2 ==0))
+        #assert(np.all(n_delim%2 ==0))
+        # the number of equation blocks there some people doing stuff like n$_1$$^2$ like wtf
 
         n_eq = n_delim //2
 
