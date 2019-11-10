@@ -5,5 +5,7 @@ __pycache__/
 cache/
 testing_sample.csv
 *.py[cod]
+*.so
 
 Baselines/custom_lda/_custom_lda.c
+Baselines/custom_lda/_custom_lda.html

@@ -1,6 +1,10 @@
 import numpy as np
 import itertools as it
 
+import logging
+
+logger = logging.getLogger('lda')
+
 def tw_matrices_to_lists(doc_word, doc_tag):
     """
     Modification of matrix_to_lists from lda.utils into its tag-word analogue
