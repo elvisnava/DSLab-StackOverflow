@@ -52,7 +52,7 @@ def tw_matrices_to_lists(doc_word, doc_tag):
     #Obtain doc id + word/tag id lists for nonzero entries in doc_word and doc_tag
     dw_doc_i, dw_word_i = np.nonzero(doc_word)
     if dw_sparse:
-        dw_counts_i = tuple(doc_word[i, j] for i, j in zip(dw_doc_i, dw_word_i))
+        dw_counts_i = np.array(list(doc_word[i, j] for i, j in zip(dw_doc_i, dw_word_i)))
     else:
         dw_counts_i = doc_word[dw_doc_i, dw_word_i]
     dt_doc_i, dt_tag_i = np.nonzero(doc_tag)
@@ -70,5 +70,6 @@ def tw_matrices_to_lists(doc_word, doc_tag):
 
     #doc-tagword array
     DTWS = np.array(list(doc_tagword_iter))
+
     #return TS, WS, DS
     return DTWS[:,2], DTWS[:,1], DTWS[:,0]

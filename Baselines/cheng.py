@@ -19,8 +19,8 @@ import custom_lda
 
 cache_dir = "../cache/"
 
-training_questions_start_time = make_datetime("01.01.2015 00:00")
-training_questions_end_time = make_datetime("01.06.2016 00:01")
+training_questions_start_time = make_datetime("01.01.2018 00:00")
+training_questions_end_time = make_datetime("01.06.2019 00:01")
 
 db_access = Data(verbose=3)
 
@@ -40,8 +40,9 @@ n_tags = tags_vectorizer.fit_transform(posts_for_fitting_ttm['tags']).shape[1]
 
 ttm_pipeline = Pipeline([
     ('tagword_transf', ColumnTransformer([
-                            ('words_pipeline', words_pipeline, 'body'),
-                            ('tags_pipeline', CountVectorizer(token_pattern=r'<.*?>'), 'tags')],
+                            ('tags_pipeline', CountVectorizer(token_pattern=r'<.*?>'), 'tags'),
+                            ('words_pipeline', words_pipeline, 'body')
+                            ],
                         verbose=True)),
     ('ttm', custom_lda.TTM(n_tags=n_tags, n_topics=10, n_iter=500))],
     memory=cache_dir+"ttm", verbose=True)

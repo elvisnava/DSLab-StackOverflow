@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger('lda')
 
 class TTM(BaseEstimator, TransformerMixin, lda.LDA):
-    def __init__(self, n_topics, n_tags, gamma=0.05, n_iter=2000, alpha=0.1, eta=0.01, random_state=None, refresh=10):
+    def __init__(self, n_topics, n_tags, gamma=0.05, n_iter=2000, alpha=0.01, eta=0.01, random_state=None, refresh=10):
         super().__init__(n_topics, n_iter, alpha, eta, random_state, refresh)
         self.n_tags = n_tags
         self.gamma = gamma
