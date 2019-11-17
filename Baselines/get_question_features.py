@@ -6,6 +6,7 @@ import pandas as pd
 
 from collections import Counter
 import readability
+import re
 
 def cumulative_term_entropy(text):
     """
@@ -26,7 +27,12 @@ def get_question_features(questions):
     Each additional column corresponds to a feature that the authors use as Question Features:
     See comments below for information on the features
     """
-    # Number of words
+
+    # Remove html tags, numbers and code
+    questions["body"] = questions["body"].str.replace(re.compile(r'<.*?>'), '')
+    questions["body"] = questions["body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
+    questions["body"] = questions["body"].str.replace(re.compile(r'\$.*?\$'), '#M')
+
     questions["num_words"] = questions['body'].str.count(' ') + 1
     # Referral count
     questions["num_hyperlinks"] = questions['body'].str.count('href')
