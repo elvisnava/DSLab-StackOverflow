@@ -38,11 +38,16 @@ def sample_open_questions(open_questions, sample_size):
 # Get Users with sufficient Answers:
 min_answers = 10
 NR_NEG_SAMPLES = 100 # TODO: change
-NR_POS_SAMPLES = 200
+NR_POS_SAMPLES = 80
 ANS_PER_USER = 10
+TEST = True
+TEST_USER_FEATURES_FILE = "user_features_2012_2016.csv" # ignored if TEST=False
+out_dir = "data_2017" # output directory (must exist)
 
 data = Data()
-data.set_time_range(start=date(year=2012, month=1, day=3), end=date(year=2015, month=1, day=1))
+data.set_time_range(start=date(year=2016, month=1, day=1), end=date(year=2017, month=1, day=1)) # CHANGED
+# for data in data_2016, data_2016_2 and data_2016_3 folder
+# data.set_time_range(start=date(year=2015, month=1, day=1), end=date(year=2016, month=1, day=1))
 # for data in data folder:
 # data.set_time_range(start=date(year=2012, month=1, day=3), end=date(year=2015, month=1, day=1))
 
@@ -53,14 +58,17 @@ assert(np.all(user_ids["c"].values > min_answers))
 
 user_ids = user_ids["owneruserid"].values
 # do not take the users that are in the data directory already
-file_list = os.listdir("data")
+file_list = os.listdir(out_dir)
 user_list_sofar = np.asarray([u.split(".")[0][4:] for u in file_list if u[0]=="u"]).astype(int)
 user_ids = [u for u in user_ids if u not in user_list_sofar]
 print("PROCESS ", len(user_ids), " USERS (not in data so far)")
 
 ## GET USER FEATURES
-u_features = get_user_features(data) # need it for all data because we also need user features for the asker
-# cannot simply get user tags for all users because then time component problematic
+if TEST:
+    u_features = pd.read_csv(TEST_USER_FEATURES_FILE).set_index("owneruserid") # CHANGED
+else:
+    u_features = get_user_features(data) # need it for all data because we also need user features for the asker # cannot simply get user tags for all users because then time component problematic
+# print("LOADED U FEATURES FROM CSV")
 
 for j in range(len(user_ids)):
     time_user_counter = 0
@@ -125,9 +133,21 @@ for j in range(len(user_ids)):
     q_features = get_question_features(question_df)
 
     # add features of the current user (the answerer) - same for all rows
-    q_features = pd.merge(q_features, u_features, left_on = "user", right_index=True, how="left", sort=False)
+    # q_features = pd.merge(q_features, u_features, left_on = "user", right_index=True, how="left", sort=False)
+    try:
+        user_feature_row = u_features.loc[user_id,:]
+        for j, col in enumerate(u_features.columns):
+            val = user_feature_row[col]
+            q_features[col] = [val for _ in range(len(q_features))]
+    except KeyError:
+        print("WARNING: not in index")
+        for j, col in enumerate(u_features.columns):
+            q_features[col] = [0 for _ in range(len(q_features))]
+        del q_features
+        continue
 
     # add features of the answerer
+    q_features["owneruserid"] = q_features["owneruserid"].astype(int)
     q_features = q_features.join(u_features, lsuffix='_user', rsuffix='_asker', on="owneruserid")
 
     ## Topic affinity
@@ -141,16 +161,6 @@ for j in range(len(user_ids)):
     # print(q_features.loc[rand_user,:])
     # print(np.asarray(q_features).shape)
     q_features = q_features.drop(["owneruserid", "body", "question_tags", "user_tags", "user"], axis=1)
-    q_features.to_csv("data/user"+str(user_id)+".csv")
+    q_features.to_csv(os.path.join(out_dir, "user"+str(user_id)+".csv"))
     print("SAVED USER", user_id)
     del q_features
-
-
-
-
-
-
-
-
-
-#
