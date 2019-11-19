@@ -1,15 +1,63 @@
 import numpy as np
+from sklearn.base import BaseEstimator, TransformerMixin
 import lda
 
 import custom_lda._custom_lda
 import custom_lda.utils
 import lda.utils
+import logging
 
-class TTM(lda.LDA):
-    def __init__(self, n_tags, gamma=0.05, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+logger = logging.getLogger('lda')
+
+class TTM(BaseEstimator, TransformerMixin, lda.LDA):
+    def __init__(self, n_topics, n_tags, gamma=0.05, n_iter=2000, alpha=0.01, eta=0.01, random_state=None, refresh=10):
+        super().__init__(n_topics, n_iter, alpha, eta, random_state, refresh)
         self.n_tags = n_tags
         self.gamma = gamma
+
+        if len(logger.handlers) == 1 and isinstance(logger.handlers[0], logging.NullHandler):
+            logging.basicConfig(level=logging.INFO)
+
+    #fit is from lda.LDA and just calls _fit, same for fit_transform
+
+    def transform(self, X, max_iter=20, tol=1e-16):
+        """
+        Transform the data X ((D x T) concat (D x W)) according to previously fitted model
+        Returns
+        -------
+        doc_topic : array-like, shape (n_samples, n_topics)
+        """
+        doc_tag = X[:, :self.n_tags]
+        doc_word = X[:, self.n_tags:]
+        if isinstance(X, np.ndarray):
+            # in case user passes a (non-sparse) array of shape (n_features,)
+            # turn it into an array of shape (1, n_features)
+            X = np.atleast_2d(X)
+        doc_topic = np.empty((X.shape[0], self.n_topics))
+        TS, WS, DS = custom_lda.utils.tw_matrices_to_lists(doc_word, doc_tag)
+        for d in np.unique(DS):
+            doc_topic[d] = self._transform_single(TS[DS == d], WS[DS == d], max_iter, tol)
+        return doc_topic
+
+    def _transform_single(self, tags, words, max_iter, tol):
+        """
+        NOTE: not sure the TTM version here is correct, still we don't really use this
+        Transform a single document according to the previously fit model
+        """
+        PZS = np.zeros((len(words), self.n_topics))
+        for iteration in range(max_iter + 1): # +1 is for initialization
+            PZS_new = self.components_[:, words].T * self.tag_components_[:, tags].T
+            PZS_new *= (PZS.sum(axis=0) - PZS + self.alpha)
+            PZS_new /= PZS_new.sum(axis=1)[:, np.newaxis] # vector to single column matrix
+            delta_naive = np.abs(PZS_new - PZS).sum()
+            logger.debug('transform iter {}, delta {}'.format(iteration, delta_naive))
+            PZS = PZS_new
+            if delta_naive < tol:
+                break
+        theta_doc = PZS.sum(axis=0) / PZS.sum()
+        assert len(theta_doc) == self.n_topics
+        assert theta_doc.shape == (self.n_topics,)
+        return theta_doc
 
     def _fit(self, X):
         """

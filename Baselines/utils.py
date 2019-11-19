@@ -31,7 +31,7 @@ def mrr(out_probs, grouped_queries, ground_truth):
         rank = ranks[gt_label] # get predicted rank of ground truth
         rank_list[grouped_queries==q] = ranks
         summed_score += 1/rank
-    assert(not np.any(rank_list==0)) # now rank_list should be filled completely 
+    assert(not np.any(rank_list==0)) # now rank_list should be filled completely
     return summed_score/len(np.unique(grouped_queries)), rank_list
 
 def multi_mrr(out_probs, grouped_queries, ground_truth):
@@ -148,8 +148,11 @@ def find_lda_and_vectorizer(pipeline):
     nested_list = pipeline2nested_list(pipeline)
     return _rek_find_lda_and_vectorizer(nested_list)
 
-def top_n_words_by_topic(vectorizer, lda_obj, n_words):
-    topic_words = lda_obj.topic_word_
+def top_n_words_by_topic(vectorizer, lda_obj, n_words, words_or_tags='words'):
+    if words_or_tags=='words':
+        topic_words = lda_obj.topic_word_
+    elif words_or_tags=='tags':
+        topic_words = lda_obj.topic_tag_
     top_n_ids = np.argsort(topic_words, axis=-1)[:, :-n_words-1:-1]
 
     vocab = np.array(vectorizer.get_feature_names())

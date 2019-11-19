@@ -11,10 +11,13 @@ from utils import split_inds, mrr, shuffle_3
 # split such that the test set consists of completely different users: "user"
 # split randomly, such that test and train might contain question-answer pairs of the same user: "mixed"
 # split such that completly different users from a completely different time frame are selected: "time"
-SPLIT_MODE = "user"
+SPLIT_MODE = "time"
 SPLIT = 0.7
 train_data = "data" # "data_14_1-14_5" # "data/"
-test_data = "data_15_1-15_5" # "data_later"
+test_data = "data_2015" # "data_2016" 
+# data_2016: wrong processig - no user features
+# data_2016_2: with user features, but some do not have user features because to early
+# data 2016_3: the ones without the ones with no user features
 
 # Load data
 dataframes = []
@@ -45,11 +48,6 @@ if SPLIT_MODE=="user":
 elif SPLIT_MODE=="mixed":
     # Take completely random sample (same user might be in test and train set, for different answers)
     df = pd.concat(dataframes)
-    ## Test what values are in question age for ground truth --> mostly 0 or 1 days old, largest 100
-    # print(len(df))
-    # gt_df = df.loc[df["label"]==1]
-    # print(len(gt_df))
-    # print(np.around(gt_df["questionage"].values, 2))
     # Split in train and tests - split by group (one answer-open_questiosn block must be in same part)
     df_grouped = df.groupby("decision_time")
     # df_train, df_test = split_groups(df_grouped)
@@ -74,11 +72,8 @@ else:
     print("ERROR: SPLIT MODE DOES NOT EXIST")
     sys.exit()
 
-uni, counts = np.unique(df_train.index, return_counts=True)
-# print(counts.tolist())
-
 # Prepare training set
-X_train = df_train.drop(['label', 'decision_time'], axis=1)
+X_train = df_train.drop(['label', 'decision_time', 'reputation_user', 'reputation_asker'], axis=1) # df_train[["questionage"]] #
 features = X_train.columns.tolist()
 X_train = np.asarray(X_train)
 Y_train = df_train['label'].values
@@ -86,7 +81,7 @@ G_train = df_train['decision_time'].values
 # print(sorted(np.unique(G_train//100)))
 
 # Prepare testing set
-X_test = df_test.drop(['label', 'decision_time'], axis=1)
+X_test = df_test.drop(['label', 'decision_time', 'reputation_user', 'reputation_asker'], axis=1) # df_test[["questionage"]] #
 X_test = np.asarray(X_test)
 Y_test = df_test['label'].values
 G_test = df_test['decision_time'].values
@@ -97,15 +92,27 @@ print("Size of training set: ", len(Y_train), " Test set:", len(Y_test))
 class_counts = np.unique(Y_train, return_counts=True)[1]
 print("Class imbalance: 1:", class_counts[0]//class_counts[1])
 
+## GRID SEARCH
+# for DEPTH in [20,40,80,120]:
+#     for WEIGHT in [20,40]:
+#         for N_ESTIMATORS in [30,60,100]:
+# PARAMS
+N_ESTIMATORS=130
+DEPTH= 20
+WEIGHT = 20
+print("------------")
+print("PARAMS:", DEPTH, WEIGHT, N_ESTIMATORS)
+
 # Train RF
 X_train, Y_train, G_train = shuffle_3(X_train, Y_train, G_train)
-clf = RandomForestClassifier(n_estimators=100, max_depth=100, class_weight={0:1, 1:40})
+clf = RandomForestClassifier(n_estimators=N_ESTIMATORS, max_depth=DEPTH, class_weight={0:1, 1:WEIGHT})
 clf.fit(X_train,Y_train)
 
 # investigate features
 sorted_importance = np.argsort(clf.feature_importances_)
 print("Features sorted by their importance for prediction:")
 print(np.asarray(features)[sorted_importance])
+print(clf.feature_importances_[sorted_importance])
 
 probs_train = clf.predict_proba(X_train)
 score, _ = mrr(probs_train[:,1], G_train, Y_train)
@@ -118,10 +125,6 @@ print("Testing MRR score:", score)
 df_test_gt = df_test
 df_test_gt["rank"] = ranks.tolist()
 print(df_test_gt.head())
-# df_test_gt = df_test[df_test["label"]==1]
-# res_list = []
-# for g in df_test_gt["decision_time"].values:
-#     res_list.append(ranks[g])
-# df_test_gt["rank"] = res_list
-# print(df_test_gt.head(10))
+
+# SAVING TEST FEATURES
 df_test_gt.to_csv("ranks_features.csv")

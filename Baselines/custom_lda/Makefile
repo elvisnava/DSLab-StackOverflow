@@ -1,4 +1,2 @@
-PYTHON ?= python3
-
 cython:
-	find . -name "*.pyx" -exec $(PYTHON) -m cython -3 {} \;
+	find . -name "*.pyx" -exec cythonize -3 -a -i {} \;

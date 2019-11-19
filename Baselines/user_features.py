@@ -18,7 +18,10 @@ def topic_reputation(data, tag_str, user_id, answer_creation):
     tags = to_taglist(tag_str)
     query_string = "SELECT Id FROM Posts WHERE Tags "+" OR Tags ".join(["LIKE '%%<"+tags[i]+">%%'" for i in range(len(tags))])
     posts_with_tags = data.query(query_string)
-    posts_with_tags_ids = tuple(posts_with_tags["id"].values.tolist())
+    if len(posts_with_tags)==1: # dann kein richties tuple, sondern (123,) --> umwandeln in (123)
+        posts_with_tags_ids = "("+str(posts_with_tags["id"].values.tolist()[0])+")"
+    else:
+        posts_with_tags_ids = tuple(posts_with_tags["id"].values.tolist())
 
     # asker_score = data.query("SELECT sum(Score) FROM Posts WHERE OwnerUserId={} AND PostTypeId=2 AND CreationDate<'{}' AND ParentId IN {}".format(asker_id, str(answer_creation), posts_with_tags_ids))
     user_score = data.query("SELECT sum(Score) as score FROM Posts WHERE OwnerUserId={} AND PostTypeId=2 AND CreationDate<'{}' AND ParentId IN {}".format(user_id, str(answer_creation), posts_with_tags_ids))
@@ -28,26 +31,6 @@ def topic_reputation(data, tag_str, user_id, answer_creation):
         return score
     else:
         return 0
-
-# def topic_reputation(data, user, question_id):
-#     """
-#     computes the topic reputation for one user-question pair, as defined in section 3.3.1 in the paper.
-#     """
-#     tags = data.query("SELECT Tags FROM Posts WHERE Id=%i"%question_id)
-#     assert(len(tags["tags"].values)==1) # just a string is returned, one post id --> only one value
-#     tag_list = (tags["tags"].values)[0]
-#     tag_list =  [tag+">" for tag in tag_list.split(">") if tag]
-#     # print(tag_list)
-#     score_sum = 0
-#     for t in tag_list:
-#         posts_with_tags = data.query("SELECT Id FROM Posts WHERE Tags LIKE '%{}%')".format(t))
-#         posts_with_tags_ids = tuple(posts_with_tags["id"].values.tolist())
-#         # sum up scores for the answers (postTypeId=2) of user user where the cooresponding question (the parent) had the current tag
-#         scores = data.query("SELECT sum(Score) FROM Posts WHERE OwnerUserId={} AND PostTypeId=2 AND ParentId IN (SELECT Id FROM Posts WHERE Tags LIKE '%{}%')".format(user,t))
-#         summed_score = scores.values[0][0]
-#         if summed_score is not None:
-#             score_sum+=summed_score # sum up for all tags in tag_list
-#     return score_sum
 
 def topic_affinity(user_tags_str, question_tags_str):
     """
@@ -70,47 +53,11 @@ def topic_affinity(user_tags_str, question_tags_str):
         prod = 0
     return prod
 
-# def topic_affinity(data, user, question_id):
-#     """
-#     Computes topic affinity for one user-question pair, as defined in section 3.3.1 in the paper
-#     In the paper, it is not clear what "user tags" refer to. Here, I simply took the tags of all
-#     questions posted by the user, as well as the tags of the question this user answered
-#     """
-#     # tags for questions and answers of this user:
-#     tags_user_questions = data.query("SELECT Tags FROM Posts WHERE OwnerUserId=%i AND PostTypeId=1"%user)
-#     tags_user_answers = data.query("SELECT Tags FROM Posts WHERE Id IN (SELECT ParentId FROM Posts WHERE PostTypeId=2 AND OwnerUserId=%i)"%user)
-#     # tags for this particular question:
-#     tags_q = data.query("SELECT Tags FROM Posts where Id=%i"%question_id)
-#     assert(len(tags_q["tags"])==1)
-#     tags_question = [tag+">" for tag in tags_q["tags"][0].split(">") if tag]
-#     # put all question and user tags in one list:
-#     tag_list = []
-#     for t in list(tags_user_questions["tags"].values):
-#         if t is not None:
-#             post_tags = [tag+">" for tag in t.split(">") if tag]
-#             tag_list.extend(post_tags)
-#     for t in list(tags_user_answers["tags"].values):
-#         if t is not None:
-#             post_tags = [tag+">" for tag in t.split(">") if tag]
-#             tag_list.extend(post_tags)
-#     # transform to probabilities:
-#     unique_tags, tag_counts = np.unique(tag_list, return_counts=True)
-#     tag_probs = tag_counts/sum(tag_counts)
-#     prob_list = []
-#     for t_q in tags_question:
-#         if t_q in unique_tags:
-#             prob_list.append(tag_probs[unique_tags.tolist().index(t_q)])
-#     # return likelihood:
-#     if len(prob_list)==0:
-#         return 0 # if no intersection of user and question tags
-#     else:
-#         return np.prod(prob_list) # product of probabilities --> likelihood
-
 
 def get_user_features(data):
     ## USER FEATURE QUERIES
     # Number of answers posted by this user so far
-    num_answers = data.query("SELECT OwnerUserId, count(OwnerUserId) as number_answers FROM Posts WHERE PostTypeId=2 AND OwnerUserId IS NOT NULL GROUP BY OwnerUserId")# .set_index("owneruserid")
+    num_answers = data.query("SELECT OwnerUserId, count(OwnerUserId) as number_answers FROM Posts WHERE PostTypeId=2 AND OwnerUserId IS NOT NULL GROUP BY OwnerUserId")
 
     # Answering success:
     answering_success = data.query("SELECT OwnerUserId, count(OwnerUserId) as accepted_answers FROM Posts WHERE PostTypeId=2 AND OwnerUserId IS NOT NULL AND Id IN (SELECT AcceptedAnswerId FROM Posts WHERE AcceptedAnswerId IS NOT NULL) GROUP BY OwnerUserId")
