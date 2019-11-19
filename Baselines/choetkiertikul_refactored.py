@@ -45,7 +45,7 @@ training_questions_end_time = make_datetime("01.06.2016 00:01")
 testing_questions_start_time = make_datetime("01.06.2016 00:02")
 testing_questions_end_time = make_datetime("31.12.2016 23:59")
 
-n_feature_time_bins = 5
+n_feature_time_bins = 50
 
 n_candidate_questions = 30
 votes_threshold_for_answerers = 3
@@ -53,13 +53,15 @@ votes_threshold_for_answerers = 3
 cache_dir = "../cache/"
 
 load_question_features = True
-load_user_features = False
+load_user_features = True
 load_final_pairs = True
 
 raw_question_features_path = os.path.join(cache_dir, "raw_question_features.pickle")
 binned_user_features_path = os.path.join(cache_dir, "binned_user_features.pickle")
 all_pairs_path = os.path.join(cache_dir, "final_candidates_pairs.pickle")
 
+
+feature_cols_for_training = ['titleLength', 'questionLength', 'nCodeBlocks', 'nEquationBlocks', 'nExternalLinks', 'nTags', 'readability', 'reputation', 'upvotes', 'downvotes', 'plattformage', 'numberquestions', 'numberanswers', 'numberacceptedanswers']
 
 # define times
 # fit LDA
@@ -111,10 +113,10 @@ else:
     with open(binned_user_features_path, "wb") as f:
         pickle.dump(binned_user_features, f)
 
+print('finished user features')
 ###################################
 # Fit the LDA
 ###################################
-
 
 if load_question_features:
     all_questions_features = pd.read_pickle(raw_question_features_path)
@@ -138,6 +140,7 @@ else:
     all_questions_features = question_feature_pipeline.transform_df(all_questions)
 
     all_questions_features.to_pickle(raw_question_features_path)
+print("finished question features")
 
 
 if load_final_pairs:
@@ -151,9 +154,35 @@ else:
 
     pd.to_pickle(all_pairs, all_pairs_path)
 
+print('finished making pairs')
 
 # go through questions and get users. (all or just best answer)
 # get and make the pairs, annotate where they come from
 
 
-training_pairs = all_pairs
+training_pairs = all_pairs[all_pairs.creationdate_question <= training_questions_end_time]
+testing_pairs = all_pairs[all_pairs.creationdate_question >= testing_questions_start_time]
+
+##########
+# classification
+#########
+classification_pipeline = Pipeline([('impute', SimpleImputer(strategy='constant', fill_value=0)),
+                                    ('rf', RandomForestClassifier(n_estimators=150, min_samples_leaf=0.0003, n_jobs=1,
+                                                                  class_weight="balanced", max_depth=75))])
+
+# Training
+train_X, train_y = dataframe_to_xy(training_pairs, feature_cols=feature_cols_for_training)
+test_X, test_y = dataframe_to_xy(testing_pairs, feature_cols=feature_cols_for_training)
+
+classification_pipeline.fit(train_X, train_y)
+train_y_hat = classification_pipeline.predict(train_X)
+print("Done with Training")
+pass
+
+test_y_hat = classification_pipeline.predict_proba(test_X)[:, 1]
+print(test_y)
+print(test_y_hat)
+
+overview_score(y_true=test_y, y_hat=test_y_hat, group=testing_pairs.question_id)
+
+

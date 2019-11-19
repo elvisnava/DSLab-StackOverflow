@@ -88,11 +88,14 @@ class Time_Binned_Features:
                 "The index should be a datetime object or a string that can be formated to a datetime with .data_utils.make_datetime")
         return timepoint
 
-    def age(self, key):
+    def age_of_data(self, key):
         timepoint = self._ensure_datetime(key)
         bin_id = self._last_id_before(timepoint)
-        _age = timepoint - self.bin_edges(bin_id)
+        _age = timepoint - self.bin_edges[bin_id]
         return _age
+
+
+
 
 
     def _compute_bin_edges(self):
@@ -115,7 +118,19 @@ class Time_Binned_Features:
 
 
 
+def shuffle_columns_within_group(dataframe, mask, column_names):
+    """for all rows where mask is true, shuffle the values of the columns given by column names."""
+    df = dataframe.copy()
 
+    n_elem = np.count_nonzero(mask)
+    new_order = np.random.permutation(n_elem)
+
+    for col_name in column_names:
+        current_values = df.loc[mask, col_name]
+        shuffled_values = current_values[new_order]
+        df.loc[mask, col_name] = shuffled_values
+
+    return df
 
 
 

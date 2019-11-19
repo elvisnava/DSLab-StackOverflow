@@ -74,7 +74,7 @@ class Test_Features(unittest.TestCase):
 
     def test_reputation(self):
         questions = self.data.query("Select Id as owneruserid, Reputation from Users")
-        repu = features.Reputation('2016-03-14 15:15:10.813000', self.data)
+        repu = features.Reputation('2019-03-14 15:15:10.813000', self.data)
         print(questions.head(20))
         cleaned = repu.fit_transform(questions)
         print(cleaned.head(20))

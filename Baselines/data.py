@@ -27,6 +27,7 @@ class Data:
         self.start, self.end = None, None
         self.drop_timewindow_views()
         self.create_date_indices()
+        self.create_post_indices()
 
     def set_time_range(self, start=None, end=None):
         self.start = start
@@ -138,6 +139,11 @@ class Data:
 
         return "WHERE " + (" AND ".join(conds))
 
+    def create_post_indices(self):
+        self.execute_command("CREATE INDEX IF NOT EXISTS index_acceptedAnswerId ON Posts using HASH(AcceptedAnswerId)")
+        self.execute_command("CREATE INDEX IF NOT EXISTS index_PostId ON Posts using HASH(Id)")
+        self.execute_command("CREATE INDEX IF NOT EXISTS index_PartentId ON Posts using HASH(ParentId)")
+
     def create_date_indices(self, time_variable_name="CreationDate"):
 
         for tablename in self.table_names_that_need_timerestrictions:
@@ -229,6 +235,35 @@ class Data:
 
         return both
 
+    def user_reputations(self):
+        def compute_factor(row):
+            if row["posttypeid"] == 1 and row["votetypeid"] == 2:  # upvoted question
+                factor = 5
+            elif row["posttypeid"] == 1 and row["votetypeid"] == 3:  # downvoted question
+                factor = -5
+            elif row["posttypeid"] == 2 and row["votetypeid"] == 2:  # upvoted answer
+                factor = 10
+            elif row["posttypeid"] == 2 and row["votetypeid"] == 3:  # downvoted anser
+                factor = -10
+            elif row["posttypeid"] == 2 and row["votetypeid"] == 1:  # accepted answer
+                factor = 15
+            elif row["votetypeid"] == 8:
+                factor = row["bountyamount"]
+            else:
+                factor = 0
+            res = factor * row["postid"]
+            return res
+
+        reputation = self.query(
+            "SELECT * FROM Votes LEFT JOIN (SELECT Id, PostTypeId, OwnerUserId FROM Posts) b ON Votes.Id=b.Id ")
+        grouped = reputation.groupby(["owneruserid", "posttypeid", "votetypeid"]).agg(
+            {"postid": "count", "bountyamount": "sum"})
+        grouped = grouped.reset_index()
+        grouped["score"] = grouped.apply(compute_factor, axis=1)
+        out = grouped.groupby(["owneruserid"]).agg({"score": "sum"}).reset_index()
+
+        renamed = out.rename(columns=dict(owneruserid='user_id', score="reputation"))
+        return renamed
 
 class GetAnswerersStrategy:
     # an instance to get answerers to questions
@@ -247,6 +282,7 @@ class GetAnswerersStrategy:
         if len(_answerers_list) == 0:
             return set()
 
+
         answerer_list = _answerers_list[np.isfinite(_answerers_list.answerer_user_id.values)]
 
         answerers_set = set(answerer_list.answerer_user_id)# we get nans for questions that were not answered
@@ -261,7 +297,6 @@ class GetAnswerersStrategy:
 
         self.db_access.set_time_range(start=None, end=before_timepoint)
 
-
         q  = """
         SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id
         FROM Posts A INNER JOIN Posts Q on A.ParentId = Q.Id
@@ -269,7 +304,9 @@ class GetAnswerersStrategy:
         """.format(question_id_list = sql_formatl_list(question_ids), additional_cond=additional_cond)
 
         result = self.db_access.query(q)
-        return result
+        result_float = result.astype(np.float)
+        return result_float
+
 
 
 def sql_formatl_list(l):

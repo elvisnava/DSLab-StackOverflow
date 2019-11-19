@@ -269,8 +269,12 @@ class Reputation(_StatelessTransformer):
         grouped = grouped.reset_index()
         grouped["score"] = grouped.apply(self.compute_factor, axis=1)
         out = grouped.groupby(["owneruserid"]).agg({"score":"sum"}).reset_index()
+
         merged = pd.merge(X, out, on="owneruserid", how="left")
         return merged
+
+
+
 
 
 # class Feature:

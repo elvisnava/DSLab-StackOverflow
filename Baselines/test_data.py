@@ -127,3 +127,8 @@ class Test_Data(unittest.TestCase):
         have_best_answer = combined_answers.loc[indices_whith_different_answers, "answer_post_id"] == best_answers.loc[indices_whith_different_answers, "answer_post_id"]
         self.assertTrue(np.count_nonzero(have_best_answer)==0)
         pass
+
+
+    def test_user_reputations(self):
+        rep = self.data.user_reputations()
+        pass

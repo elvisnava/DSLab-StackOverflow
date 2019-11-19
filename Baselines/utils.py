@@ -4,7 +4,6 @@ import scipy.spatial
 from features import LDAWrapper
 from scipy.stats import rankdata
 
-#@jit(nopython=True)
 def mrr(out_probs, grouped_queries, ground_truth):
     """
     :param out_probs: List/Array of probabilities indicating likelihood of user to select a question
@@ -34,6 +33,42 @@ def mrr(out_probs, grouped_queries, ground_truth):
         summed_score += 1/rank
     assert(not np.any(rank_list==0)) # now rank_list should be filled completely 
     return summed_score/len(np.unique(grouped_queries)), rank_list
+
+def multi_mrr(out_probs, grouped_queries, ground_truth):
+    """
+    same as mrr but accepts multiple True ground_truth entries per group. For each group the reciprocal rank of the
+     highest scoring (in out_probs) element with ground_truth = True is taken.
+
+    :param out_probs:
+    :param grouped_queries:
+    :param ground_truth:
+    :return:
+    """
+    assert(len(out_probs)==len(ground_truth))
+    assert(len(out_probs)==len(grouped_queries))
+    summed_score = 0
+    rank_list = np.zeros(len(out_probs))
+    group_ids = np.unique(grouped_queries)
+    for q in group_ids:
+        gt_group = ground_truth[grouped_queries==q]
+        out_group = out_probs[grouped_queries==q]
+
+        ranks = rankdata(-out_group)
+        rank_list[grouped_queries==q] = ranks
+
+        ranks_of_actually_true = ranks[gt_group]
+        best_rank_of_true = np.min(ranks_of_actually_true)
+
+        summed_score += 1/best_rank_of_true
+
+    assert(not np.any(rank_list == 0 ))
+    mrr_final = summed_score/len(group_ids)
+    return mrr_final, rank_list
+
+def success_at_n(out_probs, grouped_query, ground_truth):
+    pass
+
+
 
 def shuffle_3(X,Y,G):
     assert(len(X)==len(Y))
@@ -227,6 +262,8 @@ def check_overlap(df1, df2, on):
     return overlap
 
 def print_feature_importance(importanceval, names):
+    assert(len(importanceval) == len(names))
+
     sorted = np.argsort(-importanceval)
 
     for i in sorted:
