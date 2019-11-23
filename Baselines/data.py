@@ -269,8 +269,10 @@ class GetAnswerersStrategy:
     # an instance to get answerers to questions
 
     # answerer users for ids (sets)
-    def __init__(self, votes_threshold=None, _db_access = None, verbose=0):
+    def __init__(self, votes_threshold=None, _db_access = None, verbose=0, with_score=False, accepted_only=True):
         self.votes_threshold = votes_threshold
+        self.with_score = with_score
+        self.accepted_only = accepted_only
         if _db_access is None:
             self.db_access = Data(verbose=verbose)
         else:
@@ -295,13 +297,26 @@ class GetAnswerersStrategy:
         else:
             additional_cond = " OR A.Score >= {}".format(self.votes_threshold)
 
+        if self.with_score:
+            score_select = ", A.score as answer_score"
+        else:
+            score_select = ""
+
+        if self.accepted_only:
+            accepted_select = "Q.AcceptedAnswerId = A.Id"
+        else:
+            accepted_select = ""
+
         self.db_access.set_time_range(start=None, end=before_timepoint)
 
         q  = """
-        SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id
+        SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id {score_select}
         FROM Posts A INNER JOIN Posts Q on A.ParentId = Q.Id
-        WHERE A.ParentId IN {question_id_list}  AND (Q.AcceptedAnswerId = A.Id {additional_cond})
-        """.format(question_id_list = sql_formatl_list(question_ids), additional_cond=additional_cond)
+        WHERE A.ParentId IN {question_id_list}
+        """.format(question_id_list = sql_formatl_list(question_ids), score_select=score_select)
+
+        if self.accepted_only:
+            q += "AND ({accepted_select} {additional_cond})".format(accepted_select=accepted_select, additional_cond=additional_cond)
 
         result = self.db_access.query(q)
         result_float = result.astype(np.float)
