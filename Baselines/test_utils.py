@@ -2,6 +2,7 @@ import unittest
 import utils
 import pandas as pd
 import numpy as np
+import data
 
 class TestUtils(unittest.TestCase):
     def test_left_not_in_right(self):
@@ -108,6 +109,8 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(right_only, set([22,23,26,27,29]))
         self.assertEqual(intersection, set([1,4]))
         pass
+
+
 
 
     def test_pd_set_differences(self):

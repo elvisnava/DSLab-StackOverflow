@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 import data
+
 
 def make_datetime(s):
     return datetime.strptime(s, '%d.%m.%Y %H:%M')
@@ -114,6 +115,69 @@ class Time_Binned_Features:
         idd = after_start // self.intervall_length
 
         return idd
+
+
+
+def user_answers_young_question_event_iterator_with_candidates(data_cache: data.DataHandleCached, hour_threshold, start_time=None):
+    """
+    Iterate over events where a user answers a young question (as by hour threshold)
+    each event is a tuple of 4:
+        (event_date(time when user answered),
+        user_id,
+        actually_answered_id (the question that user_id picked),
+        young_open_questions_at_that_time ( a pandas dataframe with all questions that are open at that time and young enough
+
+    :param data_cache:
+    :param hour_threshold:
+    :param start_time: ignore all events before this
+    :return:
+    """
+
+    for (event_date, user_id, actually_answered_id) in user_answers_young_question_event_iterator(data.Data(), hour_threshold=hour_threshold, start_time=start_time):
+
+        open_questions = data_cache.open_questions_at_time(event_date, actually_answered_id)
+
+        young_open_questions_at_the_time = open_questions[open_questions.question_date >= (event_date - timedelta(hours=hour_threshold))]
+
+        _t = actually_answered_id in open_questions.question_id
+        yield (event_date, user_id, actually_answered_id, young_open_questions_at_the_time)
+
+
+def user_answers_young_question_event_iterator(data_handle: data.Data, hour_threshold, start_time = None):
+    """
+    Iterator over events where a user answers a question that is younger then hour_threshold, we assume that this indicates that she answered a question that was suggested (and not one she stumbled upon)
+    :param data_handle:
+    :param hour_threshold:
+    :return: yields (event_date, user_id, actually_answered) the user user_id was looking for someting to do at event_date and then answered question with id actually_answered
+    """
+    data_handle.set_time_range(start=None, end=None)
+
+    all_answers = data_handle.query("""
+    SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date
+    FROM Posts AS A JOIN Posts as Q on A.ParentId = Q.Id
+    WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} AND (A.CreationDate - Q.CreationDate) < interval '{} hours'
+    ORDER BY A.CreationDate
+    """.format(hour_threshold), use_macros=True)
+
+    if start_time is not None:
+        all_answers = all_answers[all_answers.answer_date >= start_time]
+
+
+    last_date = make_datetime('01.01.1900 00:00')
+    for i in range(len(all_answers)):
+        current = all_answers.iloc[i]
+        event_date = current.answer_date
+
+        assert(last_date < event_date)
+        last_date = event_date
+
+        user_id = current.answerer_user_id
+        actually_answered = current.question_id
+
+        sample = (event_date, user_id, actually_answered)
+        yield sample
+
+
 
 
 

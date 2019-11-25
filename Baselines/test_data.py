@@ -1,8 +1,10 @@
 import unittest
 import data
 from datetime import date
+import data_utils
 from data_utils import make_datetime
 import numpy as np
+
 
 class Test_Data(unittest.TestCase):
     def setUp(self):
@@ -96,6 +98,16 @@ class Test_Data(unittest.TestCase):
     def test_best_answer_above_threshold(self):
         ans = self.data.get_best_answer_above_threshold(upvotes_threshold=100)
 
+        pass
+
+    def test_answer_event_iterator(self):
+        dh  = data.Data(verbose=3)
+        out = data_utils.user_answers_young_question_iterator(dh, hour_threshold=5)
+        pass
+
+    def test_questions_at_time(self):
+        dh_cached = data.DataHandleCached()
+        a1 = dh_cached.open_questions_at_time(make_datetime("23.05.2015 12:12"))
         pass
 
     def test_get_answers(self):

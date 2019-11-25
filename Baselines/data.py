@@ -2,6 +2,8 @@ from sqlalchemy import create_engine
 import numpy as np
 import pandas as pd
 import re
+import copy
+import warnings
 
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
@@ -264,6 +266,59 @@ class Data:
 
         renamed = out.rename(columns=dict(owneruserid='user_id', score="reputation"))
         return renamed
+
+class DataHandleCached:
+    """This class fullfills a similar purpouse as Data above. but here we don't query the data base every time.
+    instead we cache results in the python object. Thus this class doesn't support the whole seting timeranges stuff"""
+    def __init__(self, data_handle=None):
+        """
+
+        :param data_handle:
+        """
+        if data_handle is None:
+            self.data_handle = Data()
+        else:
+            self.data_handle = copy.deepcopy(data_handle)
+
+
+    def _compute_all_question(self):
+        self._all_questions = self.data_handle.query("""
+        SELECT Q.Id as question_id, Q.CreationDate as question_date, Q.body as question_body, Q.OwnerUserId as question_owner_user_id, Q.Title as question_title, Q.Tags as Question_tags, Q.ClosedDate as question_closed_date, AcceptedAns.CreationDate as date_of_accepted_ans
+        FROM Posts Q LEFT JOIN Posts AcceptedAns ON Q.AcceptedAnswerId = AcceptedAns.Id
+        WHERE Q.PostTypeId = {questionPostType}
+        """, use_macros=True)
+
+    def open_questions_at_time(self, time, target_id = None):
+        """
+        Return all questions that don't have an accepted answer yet at <time>
+
+        :param time:
+        :return:
+        """
+
+        q = self.all_questions
+
+        mask_already_exits = (q.question_date <= time)
+        mask_no_accepted_answer_yet = (q.date_of_accepted_ans >= time) | (q.date_of_accepted_ans.isnull())
+
+        out =  q[mask_already_exits & mask_no_accepted_answer_yet]
+
+        if np.count_nonzero(target_id== out.question_id) == 0 :
+            no_accepted_yet = mask_no_accepted_answer_yet[q.question_id == target_id]
+            if not no_accepted_yet.iloc[0]:
+                warnings.warn(" question {} was answered after there was an accepted answer".format(target_id))
+            else:
+                raise RuntimeWarning("target_id not in open questions")
+
+        return out
+
+
+    @property
+    def all_questions(self):
+        if not hasattr(self, "_all_questions"):
+            self._compute_all_question()
+
+        return self._all_questions
 
 class GetAnswerersStrategy:
     # an instance to get answerers to questions
