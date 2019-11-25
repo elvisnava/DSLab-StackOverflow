@@ -98,6 +98,27 @@ def mrr2(out_probs, grouped_queries, ground_truth):
         summed_score += 1/rank
     return summed_score/len(np.unique(grouped_queries))
 
+def mrr3(out_probs, grouped_queries, ground_truth):
+    """
+    Version with continuous true labels, need to get the top
+    :param out_probs: List/Array of probabilities indicating likelihood of user to select a question
+    :param grouped_queries: list indicating the group it belongs to - can contain any identifier,
+    but in each group there must be exactly one ground truth
+    :param ground_truth: List/array of same length, containing the actual probabilities (0 for negative, 1 for positive samples)
+    """
+    assert(len(out_probs)==len(ground_truth))
+    assert(len(out_probs)==len(grouped_queries))
+    summed_score = 0
+    for q in np.unique(grouped_queries):
+        # select the current block (one user-(answer+openquestions) pair)
+        gt_group = ground_truth[grouped_queries==q]
+        gt_argmin = np.argmax(gt_group)
+        out_group = out_probs[grouped_queries==q]
+        ranks = np.argsort(out_group).tolist()
+        rank = len(ranks)-ranks.index(gt_argmin)
+        summed_score += 1/rank
+    return summed_score/len(np.unique(grouped_queries))
+
 # Make dataset
 def split_inds(nr_groups, split=0.8):
     inds = np.random.permutation(nr_groups)
