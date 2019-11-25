@@ -271,3 +271,18 @@ def print_feature_importance(importanceval, names):
 
     for i in sorted:
         print("Importance {:.3f} of Feature {} ".format(importanceval[i], names[i]))
+
+
+def retain_only_questions_with_at_least_one_answer(pairs):
+    """
+
+    :param pairs: df with target question, user candidate pairs
+    :return: same df but only with question_ids where at least one answer candidate has label true
+    """
+    # next function
+    question_ids_with_answer = np.unique(pairs[pairs.label == True].question_id.values)
+    print("Unique questions with still at least one answer, {}| total question ids {}".
+          format(len(question_ids_with_answer), len(np.unique(pairs.question_id.values))))
+
+    pairs_with_at_least_one_answer = pairs[pairs.question_id.isin(question_ids_with_answer)]
+    return pairs_with_at_least_one_answer

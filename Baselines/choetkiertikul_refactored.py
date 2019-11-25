@@ -1,3 +1,5 @@
+from sklearn.compose import ColumnTransformer
+
 from data import Data
 from datetime import datetime
 import pickle
@@ -20,6 +22,7 @@ import sklearn.metrics
 from functools import reduce
 import os
 
+import custom_lda
 
 # from lda import LDA
 from features import LDAWrapper as LDA
@@ -50,34 +53,71 @@ n_feature_time_bins = 50
 n_candidate_questions = 30
 votes_threshold_for_answerers = 3
 
+lda_type= "ttm"
+
 cache_dir = "../cache/"
 
-load_question_features = True
+load_question_features = False
 load_user_features = True
-load_final_pairs = True
+load_final_pairs = False
 
-raw_question_features_path = os.path.join(cache_dir, "raw_question_features.pickle")
+raw_question_features_path = os.path.join(cache_dir, lda_type+"_raw_question_features.pickle")
 binned_user_features_path = os.path.join(cache_dir, "binned_user_features.pickle")
-all_pairs_path = os.path.join(cache_dir, "final_candidates_pairs.pickle")
+all_pairs_path = os.path.join(cache_dir, lda_type+"_final_candidates_pairs.pickle")
 
 
 feature_cols_for_training = ['titleLength', 'questionLength', 'nCodeBlocks', 'nEquationBlocks', 'nExternalLinks', 'nTags', 'readability', 'reputation', 'upvotes', 'downvotes', 'plattformage', 'numberquestions', 'numberanswers', 'numberacceptedanswers']
 
+
 # define times
 # fit LDA
+db_access = Data(verbose=3)
+
+db_access.set_time_range(start=None, end=training_questions_start_time)
+posts_for_fitting_lda = db_access.query("SELECT Id as Question_Id, Title, Body, Tags as question_tags, CreationDate FROM Posts WHERE PostTypeId = {questionPostType}", use_macros=True) # we use both questions and answers to fit the lda
 
 ################################
 # Pipelines
 ################################
-
-lda_pipeline = Pipeline([ ## start text pipline
+word_vectorize_pipeline = Pipeline([
     ("remove_html", features.RemoveHtmlTags()),
     ("replace_numbers", features.ReplaceNumbers()),
     ("unpack", FunctionTransformer(np.squeeze, validate=False)), # this is necessary cause the vectorizer does not expect 2d data
     ("vectorize", CountVectorizer(stop_words='english')),
-    ("lda",  LDA(n_topics=10, n_iter=10000, random_state=2342)),
-    ("prevalent_topic", AppendArgmax())],
+])
+
+if lda_type == 'normal':
+    lda_pipeline = Pipeline([ ## start text pipline
+        ('vectorize_body', ColumnTransformer([('vectorize_body', word_vectorize_pipeline, 'body')])),
+        ("lda",  LDA(n_topics=10, n_iter=10+000, random_state=2342)),
+        ("prevalent_topic", AppendArgmax())
+    ],
     memory=cache_dir+"lda", verbose=True)
+
+    topic_model_pipeline = lda_pipeline
+
+
+elif lda_type == "ttm":
+    tags_vectorizer = CountVectorizer(token_pattern=r'<.*?>')
+    n_tags = tags_vectorizer.fit_transform(posts_for_fitting_lda['question_tags']).shape[1]
+    print("N tags for tagword topic model: {}".format(n_tags))
+
+    ttm_pipeline = Pipeline([
+        ('tagword_transf', ColumnTransformer([
+            ('tags_pipeline', CountVectorizer(token_pattern=r'<.*?>'), 'question_tags'),
+            ('words_pipeline', word_vectorize_pipeline, 'body')
+        ],
+            verbose=True)),
+        ('ttm', custom_lda.TTM(n_tags=n_tags, n_topics=10, n_iter=500)),
+        ("prevalent_topic", AppendArgmax())
+    ],
+        memory=cache_dir + "ttm", verbose=True)
+
+    topic_model_pipeline = ttm_pipeline
+else:
+    raise ValueError("Unkown {}".format(lda_type))
+
+
 
 readability_pipeline = Pipeline(
         [('removeHTML', features.RemoveHtmlTags()),
@@ -86,7 +126,7 @@ readability_pipeline = Pipeline(
 
 question_feature_pipeline = NamedColumnTransformer([
     ('question_id', None,  "question_id"),
-    ('topic[10],prevalent_topic', lda_pipeline, "body"), #end text pipeline
+    ('topic[10],prevalent_topic', topic_model_pipeline, ["body", "question_tags"]), #end text pipeline
     ('titleLength', features.LengthOfText(), 'title'),
     ('questionLength', Pipeline([('remove_html', features.RemoveHtmlTags()), ('BodyLength', features.LengthOfText())]), 'body'),
     ('nCodeBlocks', features.NumberOfCodeBlocks(), 'body'),
@@ -102,7 +142,6 @@ question_feature_pipeline = NamedColumnTransformer([
 # Now do data stuff
 #############
 
-db_access = Data(verbose=3)
 
 if load_user_features:
     with open(binned_user_features_path, "rb") as f:
@@ -121,8 +160,6 @@ print('finished user features')
 if load_question_features:
     all_questions_features = pd.read_pickle(raw_question_features_path)
 else:
-    db_access.set_time_range(start=None, end=training_questions_start_time)
-    posts_for_fitting_lda = db_access.query("SELECT Id as Question_Id, Title, Body, Tags as question_tags, CreationDate FROM Posts WHERE PostTypeId = {questionPostType}", use_macros=True) # we use both questions and answers to fit the lda
 
     question_feature_pipeline.fit(posts_for_fitting_lda)
 

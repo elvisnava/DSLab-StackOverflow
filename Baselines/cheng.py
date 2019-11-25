@@ -44,11 +44,12 @@ ttm_pipeline = Pipeline([
                             ('words_pipeline', words_pipeline, 'body')
                             ],
                         verbose=True)),
-    ('ttm', custom_lda.TTM(n_tags=n_tags, n_topics=10, n_iter=500))],
+    ('ttm', custom_lda.TTM(n_tags=n_tags, n_topics=10, n_iter=5))],
     memory=cache_dir+"ttm", verbose=True)
 
 #FIT TTM
 
+print("start fitting ttm")
 questions = ttm_pipeline.fit_transform(posts_for_fitting_ttm)
 
 w_vect = ttm_pipeline.named_steps['tagword_transf'].named_transformers_['words_pipeline'].named_steps['words_vectorize']
