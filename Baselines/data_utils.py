@@ -125,7 +125,7 @@ def user_answers_young_question_event_iterator_with_candidates(data_cache: data.
         (event_date(time when user answered),
         user_id,
         actually_answered_id (the question that user_id picked),
-        young_open_questions_at_that_time ( a pandas dataframe with all questions that are open at that time and young enough
+        young_open_questions_at_that_time ( a pandas dataframe with all questions that are open at that time and young enough)
 
     :param data_cache:
     :param hour_threshold:

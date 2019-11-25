@@ -303,7 +303,7 @@ class DataHandleCached:
 
         out =  q[mask_already_exits & mask_no_accepted_answer_yet]
 
-        if np.count_nonzero(target_id== out.question_id) == 0 :
+        if (target_id is not None) and (np.count_nonzero(target_id== out.question_id) == 0):
             no_accepted_yet = mask_no_accepted_answer_yet[q.question_id == target_id]
             if not no_accepted_yet.iloc[0]:
                 warnings.warn(" question {} was answered after there was an accepted answer".format(target_id))
