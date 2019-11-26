@@ -134,7 +134,7 @@ def user_answers_young_question_event_iterator_with_candidates(data_cache: data.
     """
 
     for (event_date, user_id, actually_answered_id) in user_answers_young_question_event_iterator(data.Data(), hour_threshold=hour_threshold, start_time=start_time):
-
+# TODO get young candidates
         open_questions = data_cache.open_questions_at_time(event_date, actually_answered_id)
 
         young_open_questions_at_the_time = open_questions[open_questions.question_date >= (event_date - timedelta(hours=hour_threshold))]
@@ -142,7 +142,7 @@ def user_answers_young_question_event_iterator_with_candidates(data_cache: data.
         _t = actually_answered_id in open_questions.question_id
         yield (event_date, user_id, actually_answered_id, young_open_questions_at_the_time)
 
-
+# TODO modify this to go through all events
 def user_answers_young_question_event_iterator(data_handle: data.Data, hour_threshold, start_time = None):
     """
     Iterator over events where a user answers a question that is younger then hour_threshold, we assume that this indicates that she answered a question that was suggested (and not one she stumbled upon)
