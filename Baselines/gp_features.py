@@ -1,4 +1,18 @@
+import numpy as np
 
+class GP_Feature_Collection:
+
+    def __init__(self, *args):
+        self.features = args
+
+    def update_event(self, event):
+        for f in self.features:
+            f.update(event)
+
+    def compute_features(self, list_of_user_id, questions, event_time=None):
+        sub_features = [f.compute_features(list_of_user_id, questions, event_time) for f in self.features]
+
+        return np.concatenate(sub_features, axis = 1)
 
 class GP_Features:
 
