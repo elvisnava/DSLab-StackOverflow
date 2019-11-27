@@ -345,6 +345,7 @@ class GetAnswerersStrategy:
         answerers_set = set(answerer_list.answerer_user_id)# we get nans for questions that were not answered
         return answerers_set
 
+    # TODO compute this once for all questions and all timepoints
     def get_answers_list(self, question_ids, before_timepoint=None):
         if self.votes_threshold is None:
             #we only take accepted answers

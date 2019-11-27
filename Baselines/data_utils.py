@@ -178,6 +178,40 @@ def user_answers_young_question_event_iterator(data_handle: data.Data, hour_thre
         yield sample
 
 
+def all_answer_events_iterator(data_handle: data.Data, start_time = None):
+    """
+    Iterator over events where a user answers a question
+    :param data_handle:
+    :return: yields (event_date, user_id, actually_answered, answer_event_pd_series) the user user_id was looking for someting to do at event_date and then answered question with id actually_answered
+    """
+
+    data_handle.set_time_range(start=None, end=None)
+
+    start_time_cond = ""
+    if start_time:
+        start_time_cond = "AND A.CreationDate >= date '{}' ".format(start_time)
+
+    all_answers = data_handle.query("""
+    SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date
+    FROM Posts AS A JOIN Posts as Q on A.ParentId = Q.Id
+    WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} {}
+    ORDER BY A.CreationDate
+    """.format(start_time_cond), use_macros=True)
+
+
+    last_date = make_datetime('01.01.1900 00:00')
+    for i in range(len(all_answers)):
+        current = all_answers.iloc[i]
+        event_date = current.answer_date
+
+        assert(last_date < event_date)
+        last_date = event_date
+
+        # user_id = current.answerer_user_id
+        # actually_answered = current.question_id
+        #
+        # sample = (event_date, user_id, actually_answered, current)
+        yield current
 
 
 

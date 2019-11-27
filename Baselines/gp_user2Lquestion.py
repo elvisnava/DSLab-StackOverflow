@@ -2,12 +2,27 @@
 import pandas
 import data
 import data_utils
+import pandas as pd
+from datetime import timedelta
+
+start_time =  data_utils.make_datetime("01.01.2014 00:01")
+
+
+def is_user_answers_suggested_event(event):
+    return event.question_age_at_answer <= timedelta(hours=5)
+
 
 cached_data = data.DataHandleCached()
+data_handle = data.Data()
 
 what_algo_observed = pd.DataFrame()
-for i, event in enumerate(data_utils.user_answers_young_question_event_iterator_with_candidates(cached_data, 5, start_time = data_utils.make_datetime("01.01.2014 00:01"))):
-    (event_date, user_id, actually_answered_id, young_open_questions_at_the_time) = event
+
+for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
+
+    if is_user_answers_suggested_event(event):
+        pass
+    else:
+        pass
 
     # compute features for all young_open_question_at_the_time candidates using what_algo_observed
 
