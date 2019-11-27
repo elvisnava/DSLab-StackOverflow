@@ -25,26 +25,30 @@ def get_suggestable_questions(time):
 
 what_algo_observed = pd.DataFrame()
 
-all_features = gp_features.GP_Feature_Collection() # TODO later all feature instances will go in the constructor here
+all_features_collection = gp_features.GP_Feature_Collection() # TODO later all feature instances will go in the constructor here
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
 
     if not is_user_answers_suggested_event(event):
-        all_features.update_event(event)
+        all_features_collection.update_event(event)
     else:
+        target_user_id = event.answerer_user_id
+        actually_answered_id = event.question_id
+        event_time = event.answer_date
+
         suggestable_questions = get_suggestable_questions(event.answer_date)
 
+        label = (suggestable_questions.question_id == actually_answered_id)
 
+        # features = all_features_collection.compute_features(len(suggestable_questions)*[target_user_id], suggestable_questions, event_time)
+        print("iter")
 
-    # compute features for all young_open_question_at_the_time candidates using what_algo_observed
+        # use gp to predict
+        # select candidates
 
-    # use GP to predict scores for all candidates
+        #
+        pass
 
-    # pick top N \mu + \sigma candidates
-
-    # add candidates together with (candidate == actually_answered_id) as label to what_algo_observed list
-
-    # fit GP on new what_algo_observed list
 
     if i > 300:
         break

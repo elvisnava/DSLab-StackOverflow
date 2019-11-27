@@ -3,6 +3,7 @@ from sklearn.compose import ColumnTransformer
 from data import Data
 from datetime import datetime
 import pickle
+import warnings
 
 import pandas as pd
 from functools import reduce
@@ -53,11 +54,11 @@ n_feature_time_bins = 50
 n_candidate_questions = 30
 votes_threshold_for_answerers = 3
 
-lda_type= "ttm"
+lda_type= "ttm_elvis"
 
 cache_dir = "../cache/"
 
-load_question_features = False
+load_question_features = True
 load_user_features = True
 load_final_pairs = False
 
@@ -114,6 +115,9 @@ elif lda_type == "ttm":
         memory=cache_dir + "ttm", verbose=True)
 
     topic_model_pipeline = ttm_pipeline
+elif load_question_features:
+    topic_model_pipeline = 42 # Pipeline([])
+    warnings.warn("I don't know how to make question features with the lda type {} but I am loading them so it's ok".format(lda_type))
 else:
     raise ValueError("Unkown {}".format(lda_type))
 
