@@ -182,7 +182,7 @@ def all_answer_events_iterator(data_handle: data.Data, start_time = None):
     """
     Iterator over events where a user answers a question
     :param data_handle:
-    :return: yields (event_date, user_id, actually_answered, answer_event_pd_series) the user user_id was looking for someting to do at event_date and then answered question with id actually_answered
+    :return: a pandas series with fields question_id, answer_id, answerer_user_id, question_body, question_tags, question_age_at_answer, question_date, answer_date
     """
 
     data_handle.set_time_range(start=None, end=None)
