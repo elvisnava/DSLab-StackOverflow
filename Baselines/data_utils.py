@@ -192,7 +192,7 @@ def all_answer_events_iterator(data_handle: data.Data, start_time = None):
         start_time_cond = "AND A.CreationDate >= date '{}' ".format(start_time)
 
     all_answers = data_handle.query("""
-    SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date
+    SELECT Q.Id as question_id, A.Id as answer_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date, A.score as answer_score
     FROM Posts AS A JOIN Posts as Q on A.ParentId = Q.Id
     WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} {}
     ORDER BY A.CreationDate
@@ -229,6 +229,3 @@ def shuffle_columns_within_group(dataframe, mask, column_names):
         df.loc[mask, col_name] = shuffled_values
 
     return df
-
-
-

@@ -30,6 +30,7 @@ all_features_collection = gp_features.GP_Feature_Collection() # TODO later all f
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
 
     if not is_user_answers_suggested_event(event):
+        #Don't just update the coupe, also add to the df as observation
         all_features_collection.update_event(event)
     else:
         target_user_id = event.answerer_user_id
