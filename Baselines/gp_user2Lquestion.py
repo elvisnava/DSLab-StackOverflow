@@ -25,7 +25,7 @@ def get_suggestable_questions(time):
 
 what_algo_observed = pd.DataFrame()
 
-all_features_collection = gp_features.GP_Feature_Collection() # TODO later all feature instances will go in the constructor here
+all_features_collection = gp_features.GP_Feature_Collection(gp_features.GP_Features_TTM()) # TODO later all feature instances will go in the constructor here
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
 

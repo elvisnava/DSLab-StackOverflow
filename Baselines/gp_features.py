@@ -2,11 +2,12 @@ import numpy as np
 import pandas as pd
 
 from datetime import timedelta
+import os
 
 import custom_lda
 
 cache_dir = "../cache/"
-raw_question_features_path = os.path.join(cache_dir, "raw_question_features.pickle")
+raw_question_features_path = os.path.join(cache_dir, "ttm_elvis_raw_question_features.pickle")
 
 class GP_Feature_Collection:
 
