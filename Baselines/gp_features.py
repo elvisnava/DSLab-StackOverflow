@@ -3,6 +3,7 @@ import pandas as pd
 
 from datetime import timedelta
 import os
+import json
 
 import readability
 import re
@@ -11,6 +12,7 @@ import custom_lda
 
 cache_dir = "../cache/"
 raw_question_features_path = os.path.join(cache_dir, "ttm_elvis_raw_question_features.pickle")
+tag_popularity_dic = os.path.join(cache_dir, "tag_popularity.json")
 
 class GP_Feature_Collection:
 
@@ -37,6 +39,7 @@ class GP_Features:
         #both same length for each a feature vector
         #return matrix of same length with a feature vector for the pair in each row
         pass
+
 
 class GP_Features_user(GP_Features):
     """
@@ -80,7 +83,6 @@ class GP_Features_user(GP_Features):
             if question.question_owner_user_id in self.user_features: 
                 question_feats_filter = self._filter_feats(self.user_features[question.question_owner_user_id], event_time)
             else:
-                print(question.question_owner_user_id, self.user_features.keys())
                 question_feats_filter = [0 for _ in range(len(self.feat_names))]
             # put answerer and asker features in one vector
             comb_feats.append(user_feats_filter+question_feats_filter) # pd.Series
@@ -105,7 +107,11 @@ class GP_Features_user(GP_Features):
         user_feats_filter = np.sum(np.asarray(user_feats_filter), axis=0)
         return user_feats_filter.tolist()
 
+
 class GP_Features_affinity(GP_Features):
+    """
+    Implents user-question pair features based on tags
+    """
     def __init__(self):
         self.user_tags = dict()
 
@@ -150,14 +156,27 @@ class GP_Features_affinity(GP_Features):
         pairs_dataframe = pd.DataFrame(np.asarray(affinity_list), index=np.arange(len(questions)), columns=["affinity_prod", "affinity_sum"])
         return pairs_dataframe
 
-class GP_Features_Readability(GP_Features):
+
+class GP_Features_Question(GP_Features):
+    """
+    Implements readability and thread features of the question
+    """
     def __init__(self):
-        pass # self.readability_feats = dict()
+        self.question_thread = dict()
+        # TODO: instead of loading the precomputed one, add tags with event_update 
+        with open(tag_popularity_dic, "r") as infile:
+            self.tag_popularity = json.load(infile)
 
     def update_event(self, event):
-        # readability features only need to be computed with the question body
-        # no need for previous information
-        pass
+        # * readability features only need to be computed with the question body
+        # * for thread features, add answer to the question with features
+        # [num_answers, score_sum, is_accepted]
+        # TODO: score okay to use?
+        if event.question_id not in self.question_thread:
+            self.question_thread[event.question_id] = [1, event.answer_score] # , is_acc TODO
+        else:
+            self.question_thread[event.question_id] += [1, event.answer_score] # 1 more answer, sum up the count
+        
 
     def _cumulative_term_entropy(self, text):
         """
@@ -191,7 +210,33 @@ class GP_Features_Readability(GP_Features):
         read_feats["cumulative_term_entropy"] = read_feats["question_body"].apply(lambda x: self._cumulative_term_entropy(x))
         assert(len(read_feats)==len(questions))
         read_feats = read_feats.drop(["question_id", "question_body"], axis=1)
-        return read_feats.set_index(np.arange(len(questions)))
+
+        # add thread features
+        num_answers = []
+        score_sum = []
+        for q_id, question in questions.iterrows():
+            if question.question_id in self.question_thread:
+                thread = self.question_thread[question.question_id]
+                num_answers.append(thread[0])
+                score_sum.append(thread[1])
+            else:
+                num_answers.append(0)
+                score_sum.append(0)
+
+        question_feats = read_feats.set_index(np.arange(len(questions)))
+        question_feats["num_ans_thread"] = pd.Series(num_answers)
+        question_feats["scores_ans_thread"] = pd.Series(score_sum)
+
+        # add tag popularity feature
+        tag_popularity_sum = []
+        for q_id, question in questions.iterrows():
+            tag_list = question.question_tags[1:-1].split("><")
+            popularities = [self.tag_popularity[tag] for tag in tag_list]
+            tag_popularity_sum.append(sum(popularities))
+        question_feats["tag_popularity"] = pd.Series(tag_popularity_sum)
+
+        return question_feats
+
 
 class GP_Features_TTM(GP_Features):
 

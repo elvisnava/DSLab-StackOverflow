@@ -25,9 +25,10 @@ def get_suggestable_questions(time):
 
 what_algo_observed = pd.DataFrame()
 
-all_features_collection = gp_features.GP_Feature_Collection(gp_features.GP_Features_affinity(), gp_features.GP_Features_Readability(), gp_features.GP_Features_user())
+all_features_collection = gp_features.GP_Feature_Collection(gp_features.GP_Features_affinity(), gp_features.GP_Features_Question(), gp_features.GP_Features_user())
     # gp_features.GP_Features_TTM())
 
+# out_feats = [] # for testing purposes
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
 
     if not is_user_answers_suggested_event(event):
@@ -40,13 +41,13 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
         suggestable_questions = get_suggestable_questions(event.answer_date)
 
-        print("new event")
         label = (suggestable_questions.question_id == actually_answered_id)
         # compute features
         features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
         # previous version: (I changed it because it is not necessary to give a list of target_user_id)
         # features = all_features_collection.compute_features(len(suggestable_questions)*[target_user_id], suggestable_questions, event_time)
-        ## print(features.head(10))
+        
+        # out_feats.append(features) # for testing purposes
 
         # update features with new event (ONLY IF it is pos)
         all_features_collection.update_event(event)
@@ -58,5 +59,8 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         
 
 
-    if i > 100:
+    if i > 300:
+        ## for test purposes
+        # concat = pd.concat(out_feats)
+        # concat.to_csv("test.csv") 
         break
