@@ -25,7 +25,8 @@ def get_suggestable_questions(time):
 
 what_algo_observed = pd.DataFrame()
 
-all_features_collection = gp_features.GP_Feature_Collection(gp_features.GP_Features_TTM()) # TODO later all feature instances will go in the constructor here
+all_features_collection = gp_features.GP_Feature_Collection(gp_features.GP_Features_affinity(), gp_features.GP_Features_Readability(), gp_features.GP_Features_user())
+    # gp_features.GP_Features_TTM())
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
 
@@ -39,17 +40,23 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
         suggestable_questions = get_suggestable_questions(event.answer_date)
 
+        print("new event")
         label = (suggestable_questions.question_id == actually_answered_id)
-
+        # compute features
+        features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
+        # previous version: (I changed it because it is not necessary to give a list of target_user_id)
         # features = all_features_collection.compute_features(len(suggestable_questions)*[target_user_id], suggestable_questions, event_time)
-        print("iter")
+        ## print(features.head(10))
+
+        # update features with new event (ONLY IF it is pos)
+        all_features_collection.update_event(event)
 
         # use gp to predict
         # select candidates
 
         #
-        pass
+        
 
 
-    if i > 300:
+    if i > 100:
         break

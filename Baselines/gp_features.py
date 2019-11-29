@@ -4,6 +4,9 @@ import pandas as pd
 from datetime import timedelta
 import os
 
+import readability
+import re
+
 import custom_lda
 
 cache_dir = "../cache/"
@@ -16,12 +19,12 @@ class GP_Feature_Collection:
 
     def update_event(self, event):
         for f in self.features:
-            f.update(event)
+            f.update_event(event)
 
     def compute_features(self, user_id, questions, event_time=None):
         sub_features = [f.compute_features(user_id, questions, event_time) for f in self.features]
 
-        return np.concatenate(sub_features, axis = 1)
+        return pd.concat(sub_features, axis=1) # np.concatenate(sub_features, axis = 1)
 
 class GP_Features:
 
@@ -35,8 +38,160 @@ class GP_Features:
         #return matrix of same length with a feature vector for the pair in each row
         pass
 
+class GP_Features_user(GP_Features):
+    """
+    Implements features of both users, the answerer and the asker
+    """
+    def __init__(self, timedelta_wait=timedelta(days=2), feat_names=["num_posts", "num_answers", "num_questions", "answer_score", "question_score"]):
+        self.user_features = dict()
+        self.timedelta_wait = timedelta_wait
+        self.feat_names = feat_names
 
-# TODO make subclasses
+    def update_event(self, event):
+        # [event.answer_score, event.answer_date] + curr_question_topics
+
+        # for each user update a vector [num_posts, num_answers, num_questions, answer_score, question_score, acc_ans, has_acc_ans]  
+        # TODO: add has_acc_ans and is_acc_ans
+        # has_acc_ans =  1 if event.accepted_ans_id is not None  else 0
+        # is_acc_ans = 1 if (event.accepted_ans_id is not None and event.accepted_ans_id==event.answer_id) else 0
+
+        # answerer features
+        answerer_feats = [event.answer_date, 1,1,0,event.answer_score, 0] # , is_acc_ans, 0]
+        if event.answerer_user_id not in self.user_features:
+            self.user_features[event.answerer_user_id] = [answerer_feats]
+        else:
+            self.user_features[event.answerer_user_id].append(answerer_feats)
+        # asker features
+        asker_feats = [event.question_date,1,0,1,0,event.question_score] # , 0, has_acc_ans]
+        if event.asker_user_id not in self.user_features:
+            self.user_features[event.asker_user_id] = [asker_feats]
+        else:
+            self.user_features[event.asker_user_id].append(asker_feats)
+
+    def compute_features(self, user_id, questions, event_time=None):
+        # filter the answerer features
+        if user_id in self.user_features:
+            user_feats_filter = self._filter_feats(self.user_features[user_id], event_time)
+        else:
+            user_feats_filter = [0 for _ in range(len(self.feat_names))]
+
+        comb_feats = []
+        for q_id, question in questions.iterrows():
+            if question.question_owner_user_id in self.user_features: 
+                question_feats_filter = self._filter_feats(self.user_features[question.question_owner_user_id], event_time)
+            else:
+                print(question.question_owner_user_id, self.user_features.keys())
+                question_feats_filter = [0 for _ in range(len(self.feat_names))]
+            # put answerer and asker features in one vector
+            comb_feats.append(user_feats_filter+question_feats_filter) # pd.Series
+
+        comb_cols = ["ans_"+col for col in self.feat_names] + ["ask_"+col for col in self.feat_names] 
+        
+        comb_df = pd.DataFrame(np.asarray(comb_feats), index=np.arange(len(questions)), columns=comb_cols)
+        
+        return comb_df
+
+    def _filter_feats(self, user_feats, event_time=None):
+        """
+        helper function to return the accumulated features if the date is more than 2 days old
+        @param user_feats: the raw feature vector [answer_date or question_date, num_posts, num_answers, ... etc]
+        """
+        if event_time is not None:
+            user_feats_filter = [v[1:] for v in user_feats if (event_time - v[0]) >= self.timedelta_wait]
+        else:
+            user_feats_filter = [v[1:] for v in user_feats]
+        if len(user_feats_filter)==0: # all of them were filtered out
+            return([0 for _ in range(len(self.feat_names))])
+        user_feats_filter = np.sum(np.asarray(user_feats_filter), axis=0)
+        return user_feats_filter.tolist()
+
+class GP_Features_affinity(GP_Features):
+    def __init__(self):
+        self.user_tags = dict()
+
+    def update_event(self, event):
+        # add tags to answerer
+        if event.answerer_user_id not in self.user_tags:
+            self.user_tags[event.answerer_user_id] = event.question_tags
+        else:
+            self.user_tags[event.answerer_user_id] += event.question_tags # append to string
+        # add tags to asker
+        if event.asker_user_id not in self.user_tags:
+            self.user_tags[event.asker_user_id] = event.question_tags
+        else:
+            self.user_tags[event.asker_user_id] += event.question_tags # append to string
+ 
+    def compute_features(self, user_id, questions, event_time=None):
+        if user_id not in self.user_tags:
+            return pd.DataFrame(0, index=np.arange(len(questions)), columns=["affinity_prod", "affinity_sum"])
+        
+        user_taglist = (self.user_tags[user_id])[1:-1].split("><") # list of tags
+        unique_user_tags, counts = np.unique(user_taglist, return_counts=True)
+        user_pdf = counts/np.sum(counts)
+        affinity_list = []
+        for q_id, question in questions.iterrows():
+            question_tags = question.question_tags[1:-1].split("><")
+
+            # topic affinity as in burel et al
+            activated_tags = np.isin(unique_user_tags, question_tags)
+            probs_of_activated = user_pdf[activated_tags]
+            if len(probs_of_activated) > 0:
+                prod = np.prod(probs_of_activated)
+            else:
+                prod = 0
+
+            # TODO: reputation? more features based on tags?
+
+            # sum of occurence counts of all tags
+            occ_sum = sum([counts[unique_user_tags.tolist().index(t)] for t in question_tags if t in unique_user_tags])
+            affinity_list.append([prod, occ_sum]) # pd.Series()
+
+        # pairs_dataframe = pd.concat(affinity_list, axis=1).T
+        pairs_dataframe = pd.DataFrame(np.asarray(affinity_list), index=np.arange(len(questions)), columns=["affinity_prod", "affinity_sum"])
+        return pairs_dataframe
+
+class GP_Features_Readability(GP_Features):
+    def __init__(self):
+        pass # self.readability_feats = dict()
+
+    def update_event(self, event):
+        # readability features only need to be computed with the question body
+        # no need for previous information
+        pass
+
+    def _cumulative_term_entropy(self, text):
+        """
+        Computes cumulative term entropy of a question body as specified in
+        section 3.3.2 in the paper by Burel et.al.
+        """
+        for bad_words in [".", "<", ">", "/", "\n", "?p", "'", "(", ")"]:
+            text = text.replace(bad_words, "")
+        text_list = text.lower().split(" ")
+        word_list, word_count = np.unique(text_list, return_counts=True)
+        num_words = len(word_list)
+        cte = word_count * (np.log(num_words) - np.log(word_count))/num_words
+        return sum(cte)
+
+    def compute_features(self, user_id, questions, event_time=None):
+            # Remove html tags, numbers and code
+        read_feats = questions[["question_id", "question_body"]]
+        # Referral count
+        read_feats["num_hyperlinks"] = read_feats['question_body'].str.count('href')
+        # preprocess:
+        read_feats["question_body"] = read_feats["question_body"].str.replace(re.compile(r'<.*?>'), '')
+        read_feats["question_body"] = read_feats["question_body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
+        read_feats["question_body"] = read_feats["question_body"].str.replace(re.compile(r'\$.*?\$'), '#M')
+
+        read_feats["num_words"] = read_feats['question_body'].str.count(' ') + 1
+        # GunningFogIndex and LIX
+        readability_measures = read_feats["question_body"].apply(lambda x: readability.getmeasures(x, lang='en')['readability grades'])
+        read_feats["GunningFogIndex"] = readability_measures.apply(lambda x: x['GunningFogIndex'])
+        read_feats["LIX"] = readability_measures.apply(lambda x: x['LIX'])
+        # Cumulative cross entropy
+        read_feats["cumulative_term_entropy"] = read_feats["question_body"].apply(lambda x: self._cumulative_term_entropy(x))
+        assert(len(read_feats)==len(questions))
+        read_feats = read_feats.drop(["question_id", "question_body"], axis=1)
+        return read_feats.set_index(np.arange(len(questions)))
 
 class GP_Features_TTM(GP_Features):
 
