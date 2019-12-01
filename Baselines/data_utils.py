@@ -178,12 +178,15 @@ def user_answers_young_question_event_iterator(data_handle: data.Data, hour_thre
         yield sample
 
 
-def all_answer_events_iterator(data_handle: data.Data, start_time = None):
+def all_answer_events_iterator(data_handle: data.Data=None, start_time = None, end_time=None):
     """
     Iterator over events where a user answers a question
     :param data_handle:
     :return: a pandas series with fields question_id, answer_id, answerer_user_id, question_body, question_tags, question_age_at_answer, question_date, answer_date
     """
+
+    if data_handle is None:
+        data_handle = data.Data()
 
     data_handle.set_time_range(start=None, end=None)
 
@@ -191,12 +194,15 @@ def all_answer_events_iterator(data_handle: data.Data, start_time = None):
     if start_time:
         start_time_cond = "AND A.CreationDate >= date '{}' ".format(start_time)
 
+    if end_time:
+        end_time_cond = "AND A.CreationDate < date '{}'".format(end_time)
+
     all_answers = data_handle.query("""
     SELECT Q.Id as question_id, A.Id as answer_id, Q.OwnerUserId as asker_user_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date, A.score as answer_score, Q.score as question_score
     FROM Posts AS A JOIN Posts as Q on A.ParentId = Q.Id
-    WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} {}
+    WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} {} {}
     ORDER BY A.CreationDate
-    """.format(start_time_cond), use_macros=True)
+    """.format(start_time_cond, end_time_cond), use_macros=True)
 
 
     last_date = make_datetime('01.01.1900 00:00')

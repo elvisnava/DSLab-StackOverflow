@@ -7,13 +7,18 @@ import pandas as pd
 import gp_features
 from datetime import timedelta
 import numpy as np
+import warnings
+import pickle
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
 
 
-start_time =  data_utils.make_datetime("01.01.2014 00:01")
-hour_threshold_suggested_answer = 5
+start_time_online_learning =  data_utils.make_datetime("01.01.2014 00:01")
+hour_threshold_suggested_answer = 24
+
+pretraining_cache_file = "../cache/gp/pretraining.pickle"
+redo_pretraining = True
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
@@ -31,9 +36,6 @@ def argmax_ucb(mu, sigma, beta):
     return np.argmax(mu + sigma * np.sqrt(beta))
 
 
-training_set_for_gp = pd.DataFrame()
-observed_labels = []
-mu = 0 # TODO
 sigma = 1
 beta = 0.4
 n_preds = 5
@@ -46,14 +48,65 @@ def top_N_ucb(mu, sigma, beta=beta, n=n_preds):
     return sorted_ids # first is actually the one with the highest prediction
 
 
-all_features_collection = gp_features.GP_Feature_Collection(
+all_features_collection_raw = gp_features.GP_Feature_Collection(
     gp_features.GP_Features_affinity(),
     # gp_features.GP_Features_TTM()),
     # gp_features.GP_Features_Question(),
     gp_features.GP_Features_user())
 
 
-for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time)):
+def pretrain_gp_ucp(feature_collection, start_time, end_time):
+
+    all_feates_collector = list()
+    all_label_collector = list() # list of 1d numpy arrays
+
+
+    n_candidates_collector = list()
+
+    for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time, end_time=end_time)):
+        if i%100 ==0 :
+            avg_candidates = np.mean(n_candidates_collector)
+            print("Preptraining at {}| on average {} candidates in the last {} suggested_question_events".format(event.answer_date, avg_candidates, len(n_candidates_collector)))
+            n_candidates_collector = list()
+
+        if not is_user_answers_suggested_event(event):
+            feature_collection.update_pos_event(event)
+        else:
+            suggestable_questions = get_suggestable_questions(event.answer_date)
+            if len(suggestable_questions) ==0:
+                warnings.warn("For answer id {} (to question {}) there was not a single suggestable question".format(event.answer_id, event.question_id))
+                continue
+
+            n_candidates_collector.append(len(suggestable_questions))
+
+            feats = feature_collection.compute_features(event.answerer_user_id, suggestable_questions, event.answer_date)
+            label = suggestable_questions.question_id.values == event.question_id
+
+            all_feates_collector.append(feats)
+            all_label_collector.append(label)
+
+            # TODO I don't update the negative event here
+
+            feature_collection.update_pos_event(event)
+
+    all_feats = pd.concat(all_feates_collector, axis=0)
+    all_label = np.concatenate(all_label_collector, axis=0).tolist()
+
+    return feature_collection, (all_feats, all_label)
+
+if redo_pretraining:
+    pretraining_result = pretrain_gp_ucp(all_features_collection_raw, start_time=None, end_time=start_time_online_learning)
+    with open(pretraining_cache_file, "wb") as f:
+        pickle.dump(pretraining_result, f)
+else:
+    with open(pretraining_cache_file, "rb") as f:
+        pretraining_result = pickle.load(f)
+
+
+all_features_collection, (training_set_for_gp, observed_labels ) = pretraining_result
+
+
+for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time_online_learning)):
 
     if not is_user_answers_suggested_event(event):
         # Don't just update the coupe, also add to the df as observation
