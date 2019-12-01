@@ -19,9 +19,17 @@ class GP_Feature_Collection:
     def __init__(self, *args):
         self.features = args
 
-    def update_event(self, event):
+    def update_event(self, event, user_answered, question_was_suggested):
+        for f in self.features:
+            f.update_event(event, user_answered, question_was_suggested)
+
+    def update_pos_event(self, event):
         for f in self.features:
             f.update_event(event)
+
+    def update_neg_event(self, event):
+        for f in self.features:
+            f.update_negative_event(event)
 
     def compute_features(self, user_id, questions, event_time=None):
         sub_features = [f.compute_features(user_id, questions, event_time) for f in self.features]
@@ -30,8 +38,27 @@ class GP_Feature_Collection:
 
 class GP_Features:
 
+    def update_generic_event(self, event, user_answered, question_was_suggested):
+        """
+        update a generic event
+
+        :param event: pandas series
+        :param user_answered: boolean wether the user answered or not (False if we know for sure that the user was suggested the question but didn't answer it)
+        :param question_was_suggested: wheter the question was suggested or discovered, so far ignored.
+        :return:
+        """
+        if user_answered:
+            self.update_event(event)
+        else:
+            # we (assume to) know for sure that a user did not answer the question
+            self.update_negative_event(event)
+
     def update_event(self, event) -> None:
         """ update interna"""
+        pass
+
+    def update_negative_event(self, event) -> None:
+        """update with the event wehere we observe that a particular user DID NOT ANSWER a question ater it was suggested"""
         pass
 
     def compute_features(self, user_id, questions, event_time=None):

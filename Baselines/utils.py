@@ -279,6 +279,15 @@ def get_closest_n(source_features, context_features, n, source_ids=None, context
 
     return context_indices_of_smallest_n
 
+def get_ids_of_N_largest(data, n):
+    assert(len(data.shape)==1)
+    _data = -data
+    ids = np.argpartition(_data, n)[:n]
+    return ids
+
+
+
+
 def check_overlap(df1, df2, on):
     merged = df1.merge(df2, on=on, how="inner")
 

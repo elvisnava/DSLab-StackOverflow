@@ -110,7 +110,17 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(intersection, set([1,4]))
         pass
 
+    def test_n_largest(self):
+        data = np.array([ 5,  9, 28, 37, 18, 39,  5, 24, 29, 13, 21, 23, 31, 17,  6,  7,  9, 35, 29,  8])
 
+        ids = utils.get_ids_of_N_largest(data, 4)
+
+        selected = data[ids]
+
+
+        largest_4 = set([35, 39, 37, 31 ])
+
+        self.assertEqual(largest_4, set(selected))
 
 
     def test_pd_set_differences(self):
