@@ -16,7 +16,7 @@ class GP_Feature_Collection:
 
     def update_event(self, event):
         for f in self.features:
-            f.update(event)
+            f.update_event(event)
 
     def compute_features(self, user_id, questions, event_time=None):
         sub_features = [f.compute_features(user_id, questions, event_time) for f in self.features]
