@@ -12,6 +12,7 @@ import pickle
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
+from sklearn.preprocessing import normalize
 
 
 start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
@@ -145,10 +146,15 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         
 
         # # fit and predict with gaussian process
-        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0).fit(training_set_for_gp.values, observed_labels)
+        print("starting GP")
+        gp_input = normalize(training_set_for_gp[-1000:])
+        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0, alpha=1e-5, normalize_y=True).fit(gp_input, observed_labels[-1000:])
         mu, sigma = gpr.predict(features, return_std=True)
+        print("mu", mu)
+        print("sigma", sigma)
         max_inds = top_N_ucb(mu, sigma) # this is the indexes of the predicted question that the user will answer
-
+        print("finished GP")
+        print("maximal indices", max_inds)
 
         rank_of_true_question = -1
 
@@ -169,7 +175,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
         suggested_questions_features = features.iloc[max_inds]
         suggested_questions_label = (suggestable_questions.iloc[max_inds].question_id == actually_answered_id)
-
+        print(suggested_questions_label)
         training_set_for_gp = pd.concat([training_set_for_gp, features])
         observed_labels.extend(suggested_questions_label)
 

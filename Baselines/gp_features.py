@@ -224,9 +224,9 @@ class GP_Features_Question(GP_Features):
         # Referral count
         read_feats["num_hyperlinks"] = read_feats['question_body'].str.count('href')
         # preprocess:
-        read_feats["question_body"] = read_feats["question_body"].str.replace(re.compile(r'<.*?>'), '')
-        read_feats["question_body"] = read_feats["question_body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
-        read_feats["question_body"] = read_feats["question_body"].str.replace(re.compile(r'\$.*?\$'), '#M')
+        read_feats.loc["question_body",:] = read_feats["question_body"].str.replace(re.compile(r'<.*?>'), '')
+        read_feats.loc["question_body",:] = read_feats["question_body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
+        read_feats.loc["question_body",:] = read_feats["question_body"].str.replace(re.compile(r'\$.*?\$'), '#M')
 
         read_feats["num_words"] = read_feats['question_body'].str.count(' ') + 1
         # GunningFogIndex and LIX
