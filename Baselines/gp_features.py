@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import timedelta
 import os
 import json
+import scipy
 
 import readability
 import re
@@ -224,9 +225,10 @@ class GP_Features_Question(GP_Features):
         # Referral count
         read_feats["num_hyperlinks"] = read_feats['question_body'].str.count('href')
         # preprocess:
-        read_feats.loc["question_body",:] = read_feats["question_body"].str.replace(re.compile(r'<.*?>'), '')
-        read_feats.loc["question_body",:] = read_feats["question_body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
-        read_feats.loc["question_body",:] = read_feats["question_body"].str.replace(re.compile(r'\$.*?\$'), '#M')
+            #TODO c: moved the : to fron in the loc
+        read_feats.loc[:, "question_body"] = read_feats["question_body"].str.replace(re.compile(r'<.*?>'), '')
+        read_feats.loc[:, "question_body"] = read_feats["question_body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
+        read_feats.loc[:, "question_body"] = read_feats["question_body"].str.replace(re.compile(r'\$.*?\$'), '#M')
 
         read_feats["num_words"] = read_feats['question_body'].str.count(' ') + 1
         # GunningFogIndex and LIX
@@ -280,12 +282,14 @@ class GP_Features_TTM(GP_Features):
     def update_event(self, event):
         ttm_question = self.ttm_questions_features.loc[event.question_id]
         question_topics = list(ttm_question[['topic_{}'.format(i) for i in range(self.n_topics)]])
+        curr_question_topics = question_topics #TODO c: is this identity true?
         sing_feat_vector = [event.answer_score, event.answer_date] + curr_question_topics
 
-        if event.answerer_user_id not in users_coupe_feats:
-            users_coupe_feats[event.answerer_user_id] = [sing_feat_vector]
+        # TODO c: wrote self in front of all user_coupe_feats
+        if event.answerer_user_id not in self.users_coupe_feats:
+            self.users_coupe_feats[event.answerer_user_id] = [sing_feat_vector]
         else:
-            users_coupe_feats[event.answerer_user_id].append(sing_feat_vector)
+            self.users_coupe_feats[event.answerer_user_id].append(sing_feat_vector)
 
     def compute_features(self, user_id, questions, event_time=None):
         """
@@ -295,6 +299,11 @@ class GP_Features_TTM(GP_Features):
         :param questions: Df of features for the selected questions
         :param event_time: If we specify an event time, we filter the user feat list based on this
         """
+
+        q_u = {
+            'votes_mean': 0, 'votes_sd': 0, 'votes_sum': 0, 'votes_max': 0, 'votes_min': 0, 'new': 1
+        }
+
         feat_pairs = []
         for q_id, question in questions.iterrows():
             ttm_question = self.ttm_questions_features.loc[question.question_id]
@@ -308,17 +317,15 @@ class GP_Features_TTM(GP_Features):
                 else:
                     user_feats_filter = user_feats
 
-                #I use v[0] as I assume that right now I only save votes and not the whole COUPE
-                #Otherwise use np.array(v[:4]) (the 4 depends on the no of coupe feats)
-                #Assume that the TTM vector in the user_feats starts from pos 2 (pos 1 is the date)
-                q_u_pre_agg = np.array([v[0] * (1 - scipy.spatial.distance.jensenshannon(curr_question_topics, v[2:])) for v in user_feats_filter])
-                q_u = {
-                       'votes_mean': np.mean(q_u_pre_agg), 'votes_sd': np.std(q_u_pre_agg), 'votes_sum': np.sum(q_u_pre_agg), 'votes_max': np.max(q_u_pre_agg), 'votes_min': np.min(q_u_pre_agg), 'new': 0
-                      }
-            else:
-                q_u = {
-                       'votes_mean': 0, 'votes_sd': 0, 'votes_sum': 0, 'votes_max': 0, 'votes_min': 0, 'new': 1
-                      }
+                if len(user_feats_filter) > 0 :
+                    #I use v[0] as I assume that right now I only save votes and not the whole COUPE
+                    #Otherwise use np.array(v[:4]) (the 4 depends on the no of coupe feats)
+                    #Assume that the TTM vector in the user_feats starts from pos 2 (pos 1 is the date)
+                    q_u_pre_agg = np.array([v[0] * (1 - scipy.spatial.distance.jensenshannon(curr_question_topics, v[2:])) for v in user_feats_filter])
+                    q_u = {
+                           'votes_mean': np.mean(q_u_pre_agg), 'votes_sd': np.std(q_u_pre_agg), 'votes_sum': np.sum(q_u_pre_agg), 'votes_max': np.max(q_u_pre_agg), 'votes_min': np.min(q_u_pre_agg), 'new': 0
+                          }
+
             feat_pairs.append(pd.Series(q_u))
         pairs_dataframe = pd.concat(feat_pairs, axis=1).T
         return pairs_dataframe

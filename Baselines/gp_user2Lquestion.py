@@ -12,14 +12,17 @@ import pickle
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
-from sklearn.preprocessing import normalize
+from sklearn.preprocessing import normalize, StandardScaler
 
 
 start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
 hour_threshold_suggested_answer = 24
+sigma = 1
+beta = 0.4
+n_preds = 5
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = False
+redo_pretraining = True
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
@@ -36,22 +39,35 @@ def get_suggestable_questions(time):
 def argmax_ucb(mu, sigma, beta):
     return np.argmax(mu + sigma * np.sqrt(beta))
 
+def mrr_gp(ranks):
+    inv = 1/ranks
+    inv[inv<0] = 0
+    return np.mean(inv)
+
+def compute_chance_success(n_candidates_list, n=n_preds):
+    p = n/np.array(n_candidates_list)
+    p[p>1] = 1 # if there n_preds smaller then candidate list
+    return np.mean(p)
+
 def print_intermediate_info(info_dict, current_time):
     if len(info_dict['event_time'])==0:
         print("empty info dict")
         return
 
-    last_n = 100
+    last_n = 10
+
     avg_candidates = np.mean(np.array(info_dict["n_candidates"])[-last_n:])
     most_recent_time = info_dict['event_time'][-1]
 
-    s = "{} | number of average candidates: {}".format(current_time, avg_candidates)
+    percent_success = np.mean(np.array(info_dict['predicted_rank'][-last_n:]) != -1)
+
+    chance_success = compute_chance_success(info_dict["n_candidates"][-last_n:])
+
+    s = "{} | number of average candidates: {:.1f} | fraction_success : {:.3f} | chance_level success: {:.3f}".format(
+        current_time, avg_candidates, percent_success, chance_success)
     print(s)
 
 
-sigma = 1
-beta = 0.4
-n_preds = 5
 
 
 def top_N_ucb(mu, sigma, beta=beta, n=n_preds):
@@ -63,8 +79,8 @@ def top_N_ucb(mu, sigma, beta=beta, n=n_preds):
 
 all_features_collection_raw = gp_features.GP_Feature_Collection(
     gp_features.GP_Features_affinity(),
-    # gp_features.GP_Features_TTM()),
-    # gp_features.GP_Features_Question(),
+    gp_features.GP_Features_TTM(),
+    gp_features.GP_Features_Question(),
     gp_features.GP_Features_user())
 
 
@@ -118,11 +134,9 @@ else:
 
 all_features_collection, (training_set_for_gp, observed_labels) = pretraining_result
 
-info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list()}
+info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time_online_learning)):
-    if i%1 ==0:
-        print_intermediate_info(info_dict, event.answer_date)
 
 
     if not is_user_answers_suggested_event(event):
@@ -146,15 +160,15 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         
 
         # # fit and predict with gaussian process
-        print("starting GP")
-        gp_input = normalize(training_set_for_gp[-1000:])
-        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0, alpha=1e-5, normalize_y=True).fit(gp_input, observed_labels[-1000:])
+        # print("starting GP")
+        gp_input = StandardScaler().fit_transform(training_set_for_gp[-1000:])
+        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0, alpha=1e-5, normalize_y=False).fit(gp_input, observed_labels[-1000:])
         mu, sigma = gpr.predict(features, return_std=True)
-        print("mu", mu)
-        print("sigma", sigma)
+        # print("mu", mu)
+        # print("sigma", sigma)
         max_inds = top_N_ucb(mu, sigma) # this is the indexes of the predicted question that the user will answer
-        print("finished GP")
-        print("maximal indices", max_inds)
+        # print("finished GP")
+        # print("maximal indices", max_inds)
 
         rank_of_true_question = -1
 
@@ -175,7 +189,8 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
         suggested_questions_features = features.iloc[max_inds]
         suggested_questions_label = (suggestable_questions.iloc[max_inds].question_id == actually_answered_id)
-        print(suggested_questions_label)
+
+        assert(np.all(training_set_for_gp.columns == features.columns))
         training_set_for_gp = pd.concat([training_set_for_gp, features])
         observed_labels.extend(suggested_questions_label)
 
@@ -184,10 +199,21 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         info_dict["event_time"].append(event_time)
         info_dict["user_id"].append(target_user_id)
         info_dict["n_candidates"].append(len(suggestable_questions))
+        info_dict["predicted_rank"].append(rank_of_true_question)
+
+        # print('pred rank', info_dict['predicted_rank'])
 
 
-    pass
+        if i%10==0:
+            print('mu', mu)
+            print('sigma', sigma)
+            print('label', suggested_questions_label.values)
+            print_intermediate_info(info_dict, event.answer_date)
 
     if i > 300:
-        training_set_for_gp.to_csv("test.csv")
         break
+
+
+training_set_for_gp.to_csv("traaaining_set_for_gp.csv")
+gp_info_dict = pd.DataFrame(data = info_dict)
+gp_info_dict.to_csv("gp_run_info_dict.csv")
