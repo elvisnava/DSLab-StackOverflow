@@ -115,7 +115,7 @@ else:
         pretraining_result = pickle.load(f)
 
 
-all_features_collection, (training_set_for_gp, observed_labels ) = pretraining_result
+all_features_collection, (training_set_for_gp, observed_labels) = pretraining_result
 
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list()}
 
@@ -147,7 +147,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         # # fit and predict with gaussian process
         gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0).fit(training_set_for_gp.values, observed_labels)
         mu, sigma = gpr.predict(features, return_std=True)
-        max_inds = argmax_ucb(mu, sigma, beta) # this is the indexes of the predicted question that the user will answer
+        max_inds = top_N_ucb(mu, sigma) # this is the indexes of the predicted question that the user will answer
 
 
         rank_of_true_question = -1
