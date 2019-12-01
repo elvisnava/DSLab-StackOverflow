@@ -14,11 +14,11 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
 
 
-start_time_online_learning =  data_utils.make_datetime("01.01.2014 00:01")
+start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
 hour_threshold_suggested_answer = 24
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = True
+redo_pretraining = False
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
@@ -34,6 +34,18 @@ def get_suggestable_questions(time):
 
 def argmax_ucb(mu, sigma, beta):
     return np.argmax(mu + sigma * np.sqrt(beta))
+
+def print_intermediate_info(info_dict, current_time):
+    if len(info_dict['event_time'])==0:
+        print("empty info dict")
+        return
+
+    last_n = 100
+    avg_candidates = np.mean(np.array(info_dict["n_candidates"])[-last_n:])
+    most_recent_time = info_dict['event_time'][-1]
+
+    s = "{} | number of average candidates: {}".format(current_time, avg_candidates)
+    print(s)
 
 
 sigma = 1
@@ -105,8 +117,12 @@ else:
 
 all_features_collection, (training_set_for_gp, observed_labels ) = pretraining_result
 
+info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list()}
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time_online_learning)):
+    if i%1 ==0:
+        print_intermediate_info(info_dict, event.answer_date)
+
 
     if not is_user_answers_suggested_event(event):
         # Don't just update the coupe, also add to the df as observation
@@ -118,6 +134,9 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         event_time = event.answer_date
 
         suggestable_questions = get_suggestable_questions(event.answer_date)
+        if len(suggestable_questions) ==0:
+            warnings.warn("For answer id {} (to question {}) there was not a single suggestable question".format(event.answer_id, event.question_id))
+            continue
 
         # compute features
         features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
@@ -126,7 +145,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         
 
         # # fit and predict with gaussian process
-        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0).fit(training_set_for_gp, observed_labels)
+        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0).fit(training_set_for_gp.values, observed_labels)
         mu, sigma = gpr.predict(features, return_std=True)
         max_inds = argmax_ucb(mu, sigma, beta) # this is the indexes of the predicted question that the user will answer
 
@@ -153,6 +172,12 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
         training_set_for_gp = pd.concat([training_set_for_gp, features])
         observed_labels.extend(suggested_questions_label)
+
+        # update info
+        info_dict["answer_id"].append(event.answer_id)
+        info_dict["event_time"].append(event_time)
+        info_dict["user_id"].append(target_user_id)
+        info_dict["n_candidates"].append(len(suggestable_questions))
 
 
     pass

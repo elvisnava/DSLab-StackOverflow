@@ -194,6 +194,7 @@ def all_answer_events_iterator(data_handle: data.Data=None, start_time = None, e
     if start_time:
         start_time_cond = "AND A.CreationDate >= date '{}' ".format(start_time)
 
+    end_time_cond = ""
     if end_time:
         end_time_cond = "AND A.CreationDate < date '{}'".format(end_time)
 
