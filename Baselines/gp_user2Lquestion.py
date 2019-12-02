@@ -167,7 +167,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
         # previous version: (I changed it because it is not necessary to give a list of target_user_id)
         # features = all_features_collection.compute_features(len(suggestable_questions)*[target_user_id], suggestable_questions, event_time)
-        
+
 
         # # fit and predict with gaussian process
         # print("starting GP")
@@ -237,14 +237,12 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
             print('label', suggested_questions_label)
             print_intermediate_info(info_dict, event.answer_date)
 
-    if i % 1000 == 0 and i > 100:
-
-        debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
-        assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
-        debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
-        debug_used_questions.to_csv("events_used_by_gp.csv")
-        training_set_for_gp.to_csv("training_set_for_gp.csv")
-
-
-        gp_info_dict = pd.DataFrame(data = info_dict)
-        gp_info_dict.to_csv("gp_run_info_dict.csv")
+    if i % 1000 == 0:
+        if len(debug_all_questions_used_by_gp) != 0:
+            debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
+            assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
+            debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
+            debug_all_questions_used_by_gp.to_csv("events_used_by_gp.csv")
+            training_set_for_gp.to_csv("training_set_for_gp.csv")
+            gp_info_dict = pd.DataFrame(data = info_dict)
+            gp_info_dict.to_csv("gp_run_info_dict.csv")
