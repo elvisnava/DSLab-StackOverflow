@@ -286,6 +286,19 @@ def get_ids_of_N_largest(data, n):
     return ids
 
 
+def first_k_false_mask(mask, k):
+    """
+    return a boolean array of same length as mask, where the first k originially false elements are no set to true
+    elements that were true before remain true
+
+    :param mask: boolean aray
+    :return:
+    """
+    out = mask.copy()
+    inds_to_set_true = np.argwhere(np.invert(mask)).flatten()[:k]
+    out[inds_to_set_true] = True
+    return out
+
 
 
 def check_overlap(df1, df2, on):

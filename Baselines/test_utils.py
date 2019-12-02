@@ -123,6 +123,23 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(largest_4, set(selected))
 
 
+    def test_set_first_k_true(self):
+
+        mk_arr = lambda l: np.array(l, dtype=bool)
+        l = mk_arr([0,1,0,0,1,0])
+
+        o1 = utils.first_k_false_mask(l, 1)
+        self._assert_array_equal(mk_arr([1,1,0,0,1,0]), o1)
+
+
+        o2 = utils.first_k_false_mask(l, 2)
+
+        self._assert_array_equal(mk_arr([1,1,1,0,1,0]), o2)
+
+    def _assert_array_equal(self, a, b):
+        self.assertTrue(np.all(a==b))
+
+
     def test_pd_set_differences(self):
         # make left array
         a = np.random.randint(0, 5, 100).astype(float)

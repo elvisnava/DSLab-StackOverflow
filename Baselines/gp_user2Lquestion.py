@@ -21,8 +21,10 @@ sigma = 1
 beta = 0.4
 n_preds = 5
 
+save_n_negative_suggestons = 1
+
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = True
+redo_pretraining = False
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
@@ -133,8 +135,12 @@ else:
 
 
 all_features_collection, (training_set_for_gp, observed_labels) = pretraining_result
+n_pretraining_samples = len(training_set_for_gp)
+print("{} pretraining examples".format(n_pretraining_samples))
 
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
+
+debug_all_questions_used_by_gp =list()
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time_online_learning)):
 
@@ -188,11 +194,28 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         # update training_data for gaaussian process
 
         suggested_questions_features = features.iloc[max_inds]
-        suggested_questions_label = (suggestable_questions.iloc[max_inds].question_id == actually_answered_id)
+        suggested_questions_label = (suggestable_questions.iloc[max_inds].question_id.values == actually_answered_id)
+
+        # what we want to save
+        data_to_use_mask = utils.first_k_false_mask(suggested_questions_label, save_n_negative_suggestons) # take the true example + the save_n_negative_suggestions negative examples with the highest mean+sigma
+
+        question_features_to_save = suggested_questions_features[data_to_use_mask]
+        labels_to_save = suggested_questions_label[data_to_use_mask]
+        if np.any(suggested_questions_label):
+            assert(np.any(labels_to_save)) #if the true question was suggested we should better save that.
+
+
+        # for debugging
+        debug_all_questions_used_by_gp.append(suggestable_questions.iloc[max_inds][data_to_use_mask])
+
 
         assert(np.all(training_set_for_gp.columns == features.columns))
-        training_set_for_gp = pd.concat([training_set_for_gp, features])
-        observed_labels.extend(suggested_questions_label)
+
+        training_set_for_gp = pd.concat([training_set_for_gp, question_features_to_save])
+        observed_labels.extend(labels_to_save)
+
+        assert(len(training_set_for_gp) == len(observed_labels))
+
 
         # update info
         info_dict["answer_id"].append(event.answer_id)
@@ -204,16 +227,20 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         # print('pred rank', info_dict['predicted_rank'])
 
 
-        if i%10==0:
+        if i%100==0:
             print('mu', mu)
             print('sigma', sigma)
-            print('label', suggested_questions_label.values)
+            print('label', suggested_questions_label)
             print_intermediate_info(info_dict, event.answer_date)
 
-    if i > 300:
-        break
+    if i % 1000 == 0:
+
+        debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
+        assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
+        debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
+        debug_all_questions_used_by_gp.to_csv("events_used_by_gp.csv")
+        training_set_for_gp.to_csv("training_set_for_gp.csv")
 
 
-training_set_for_gp.to_csv("traaaining_set_for_gp.csv")
-gp_info_dict = pd.DataFrame(data = info_dict)
-gp_info_dict.to_csv("gp_run_info_dict.csv")
+        gp_info_dict = pd.DataFrame(data = info_dict)
+        gp_info_dict.to_csv("gp_run_info_dict.csv")

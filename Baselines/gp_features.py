@@ -9,6 +9,8 @@ import scipy
 import readability
 import re
 
+pd.set_option('mode.chained_assignment', 'raise')
+
 import custom_lda
 
 cache_dir = "../cache/"
@@ -221,22 +223,22 @@ class GP_Features_Question(GP_Features):
 
     def compute_features(self, user_id, questions, event_time=None):
             # Remove html tags, numbers and code
-        read_feats = questions[["question_id", "question_body"]]
+        read_feats = questions[["question_id", "question_body"]].copy() # TODO the copy is just to not get the pandas settingWithCopy waranings all the time, might be slow?
         # Referral count
-        read_feats["num_hyperlinks"] = read_feats['question_body'].str.count('href')
+        read_feats.loc[:, "num_hyperlinks"] = read_feats['question_body'].str.count('href')
         # preprocess:
             #TODO c: moved the : to fron in the loc
         read_feats.loc[:, "question_body"] = read_feats["question_body"].str.replace(re.compile(r'<.*?>'), '')
         read_feats.loc[:, "question_body"] = read_feats["question_body"].str.replace(re.compile(r'(\d[\.]?)+'), '#N')
         read_feats.loc[:, "question_body"] = read_feats["question_body"].str.replace(re.compile(r'\$.*?\$'), '#M')
 
-        read_feats["num_words"] = read_feats['question_body'].str.count(' ') + 1
+        read_feats.loc[:, "num_words"] = read_feats['question_body'].str.count(' ') + 1
         # GunningFogIndex and LIX
         readability_measures = read_feats["question_body"].apply(lambda x: readability.getmeasures(x, lang='en')['readability grades'])
-        read_feats["GunningFogIndex"] = readability_measures.apply(lambda x: x['GunningFogIndex'])
-        read_feats["LIX"] = readability_measures.apply(lambda x: x['LIX'])
+        read_feats.loc[:, "GunningFogIndex"] = readability_measures.apply(lambda x: x['GunningFogIndex'])
+        read_feats.loc[:, "LIX"] = readability_measures.apply(lambda x: x['LIX'])
         # Cumulative cross entropy
-        read_feats["cumulative_term_entropy"] = read_feats["question_body"].apply(lambda x: self._cumulative_term_entropy(x))
+        read_feats.loc[:, "cumulative_term_entropy"] = read_feats["question_body"].apply(lambda x: self._cumulative_term_entropy(x))
         assert(len(read_feats)==len(questions))
         read_feats = read_feats.drop(["question_id", "question_body"], axis=1)
 
@@ -253,8 +255,8 @@ class GP_Features_Question(GP_Features):
                 score_sum.append(0)
 
         question_feats = read_feats.set_index(np.arange(len(questions)))
-        question_feats["num_ans_thread"] = pd.Series(num_answers)
-        question_feats["scores_ans_thread"] = pd.Series(score_sum)
+        question_feats.loc[:, "num_ans_thread"] = pd.Series(num_answers)
+        question_feats.loc[:, "scores_ans_thread"] = pd.Series(score_sum)
 
         # add tag popularity feature
         tag_popularity_sum = []
@@ -262,7 +264,7 @@ class GP_Features_Question(GP_Features):
             tag_list = question.question_tags[1:-1].split("><")
             popularities = [self.tag_popularity[tag] for tag in tag_list]
             tag_popularity_sum.append(sum(popularities))
-        question_feats["tag_popularity"] = pd.Series(tag_popularity_sum)
+        question_feats.loc[:, "tag_popularity"] = pd.Series(tag_popularity_sum)
 
         return question_feats
 
