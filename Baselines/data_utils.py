@@ -205,6 +205,7 @@ def all_answer_events_iterator(data_handle: data.Data=None, start_time = None, e
     ORDER BY A.CreationDate
     """.format(start_time_cond, end_time_cond), use_macros=True)
 
+    print("all_answer_events_iterator will go through {} events until {}".format(len(all_answers), all_answers.answer_date.max()))
 
     last_date = make_datetime('01.01.1900 00:00')
     for i in range(len(all_answers)):

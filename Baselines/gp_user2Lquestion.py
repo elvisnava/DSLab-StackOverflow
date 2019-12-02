@@ -37,6 +37,10 @@ def get_suggestable_questions(time):
     mask = (open_questions.question_date >= time - timedelta(hours=hour_threshold_suggested_answer))
     return open_questions[mask]
 
+def optimising_dummy_func(obj_func, initial_theta, bounds):
+    func_val = obj_func(initial_theta)
+    return initial_theta, func_val
+
 
 def argmax_ucb(mu, sigma, beta):
     return np.argmax(mu + sigma * np.sqrt(beta))
@@ -168,7 +172,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         # # fit and predict with gaussian process
         # print("starting GP")
         gp_input = StandardScaler().fit_transform(training_set_for_gp[-1000:])
-        gpr = GaussianProcessRegressor(kernel=DotProduct(), random_state=0, alpha=1e-5, normalize_y=False).fit(gp_input, observed_labels[-1000:])
+        gpr = GaussianProcessRegressor(kernel=DotProduct(sigma_0=1.0), random_state=0, alpha=1e-5, normalize_y=False).fit(gp_input, observed_labels[-1000:])
         mu, sigma = gpr.predict(features, return_std=True)
         # print("mu", mu)
         # print("sigma", sigma)
@@ -233,12 +237,12 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
             print('label', suggested_questions_label)
             print_intermediate_info(info_dict, event.answer_date)
 
-    if i % 1000 == 0:
+    if i % 1000 == 0 and i > 100:
 
         debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
         assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
         debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
-        debug_all_questions_used_by_gp.to_csv("events_used_by_gp.csv")
+        debug_used_questions.to_csv("events_used_by_gp.csv")
         training_set_for_gp.to_csv("training_set_for_gp.csv")
 
 
