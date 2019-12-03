@@ -22,7 +22,7 @@ import streaming_sparse_gp.osgpr_utils as osgpr_utils
 #Choose either "sklearn-GP" or "osgpr"
 model_choice = "osgpr"
 #For osgpr, M is the number of pseduo-points (for sparse approx)
-M_points = 1000
+M_points = 100
 
 start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
 hour_threshold_suggested_answer = 24
@@ -168,6 +168,18 @@ if model_choice == "osgpr":
     model.optimize(disp=1)
 
 
+#With osgpr we pretrain immediately
+if model_choice == "osgpr":
+    persistent_scaler = StandardScaler()
+    gp_input = persistent_scaler.fit_transform(training_set_for_gp)
+    Z1 = gp_input[np.random.permutation(gp_input.shape[0])[0:M_points], :]
+    model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.RBF(1), Z=Z1)
+    model.likelihood.variance = 0.001
+    model.kern.variance = 1.0
+    model.kern.lengthscales = 0.8
+    model.optimize(disp=1)
+
+
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
 
 debug_all_questions_used_by_gp =list()
@@ -220,16 +232,19 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
                 Zinit = osgpr_utils.init_Z(Zopt, new_gp_input, use_old_Z=False)
 
-                model = osgpr.OSGPR_VFE(X2, y2, GPflow.kernels.RBF(1), mu, Su, Kaa, Zopt, Zinit)
-                model.likelihood.variance = model1.likelihood.variance.value
-                model.kern.variance = model1.kern.variance.value
-                model.kern.lengthscales = model1.kern.lengthscales.value
+                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(1), mu, Su, Kaa, Zopt, Zinit)
+                new_model.likelihood.variance = model.likelihood.variance.value
+                new_model.kern.variance = model.kern.variance.value
+                new_model.kern.lengthscales = model.kern.lengthscales.value
+                model = new_model
                 model.optimize(disp=1)
 
             mu, var = model.predict_f(features)
-            sigma = np.sqrt(var)
+            mu = np.squeeze(mu)
+            sigma = np.squeeze(np.sqrt(var))
         else:
             raise NotImplementedError("This model hasn't been implemented yet")
+
         # print("mu", mu)
         # print("sigma", sigma)
         max_inds = top_N_ucb(mu, sigma) # this is the indexes of the predicted question that the user will answer
@@ -276,7 +291,9 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         if model_choice == "osgpr":
             #Turn boolean into 0 and 1
             labels_to_save = np.array([1.0 if i else 0.0 for i in labels_to_save])[:, np.newaxis]
-        observed_labels = np.concatenate((observed_labels, labels_to_save))
+            observed_labels = np.concatenate((observed_labels, labels_to_save))
+        else:
+            observed_labels.extend(labels_to_save)
 
         assert(len(training_set_for_gp) == len(observed_labels))
 

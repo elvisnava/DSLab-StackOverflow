@@ -6,7 +6,10 @@ def get_mu_su(model):
     mu, Su = model.predict_f_full_cov(Zopt)
     if len(Su.shape) == 3:
         Su = Su[:, :, 0]
+<<<<<<< HEAD
         vx = vx[:, 0]
+=======
+>>>>>>> f87b5ee41a89051221a3579d318e53ad5bc4b7c2
     return mu, Su, Zopt
 
 def init_Z(cur_Z, new_X, use_old_Z=True, first_batch=True):
