@@ -14,6 +14,15 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
 from sklearn.preprocessing import normalize, StandardScaler
 
+import tensorflow as tf
+import gpflow as GPflow
+import streaming_sparse_gp.osgpr as osgpr
+import streaming_sparse_gp.osgpr_utils as osgpr_utils
+
+#Choose either "sklearn-GP" or "osgpr"
+model_choice = "osgpr"
+#For osgpr, M is the number of pseduo-points (for sparse approx)
+M_points = 100
 
 start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
 hour_threshold_suggested_answer = 24
@@ -139,12 +148,28 @@ else:
 
 
 all_features_collection, (training_set_for_gp, observed_labels) = pretraining_result
+if model_choice == "osgpr":
+    #Turn it into an array of 0 and 1s
+    observed_labels = np.array([1.0 if i else 0.0 for i in observed_labels])[:, np.newaxis]
 n_pretraining_samples = len(training_set_for_gp)
 print("{} pretraining examples".format(n_pretraining_samples))
+
+#With osgpr we pretrain immediately
+if model_choice == "osgpr":
+    persistent_scaler = StandardScaler()
+    gp_input = persistent_scaler.fit_transform(training_set_for_gp)
+    Z1 = gp_input[np.random.permutation(gp_input.shape[0])[0:M_points], :]
+    model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.RBF(1), Z=Z1)
+    model.likelihood.variance = 0.001
+    model.kern.variance = 1.0
+    model.kern.lengthscales = 0.8
+    model.optimize(disp=1)
+
 
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
 
 debug_all_questions_used_by_gp =list()
+n_new_points = 0
 
 for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time_online_learning)):
 
@@ -170,10 +195,42 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
 
         # # fit and predict with gaussian process
-        # print("starting GP")
-        gp_input = StandardScaler().fit_transform(training_set_for_gp[-1000:])
-        gpr = GaussianProcessRegressor(kernel=DotProduct(sigma_0=1.0), random_state=0, alpha=1e-5, normalize_y=False).fit(gp_input, observed_labels[-1000:])
-        mu, sigma = gpr.predict(features, return_std=True)
+        if model_choice == "sklearn-GP":
+            # print("starting GP")
+            gp_input = StandardScaler().fit_transform(training_set_for_gp[-1000:])
+            gpr = GaussianProcessRegressor(kernel=DotProduct(sigma_0=1.0), random_state=0, alpha=1e-5, normalize_y=False).fit(gp_input, observed_labels[-1000:])
+            mu, sigma = gpr.predict(features, return_std=True)
+        elif model_choice == "osgpr":
+            #If we added new points, do an online update
+            if n_new_points > 0:
+                new_gp_input = persistent_scaler.transform(training_set_for_gp[-n_new_points:])
+                new_observed_labels = observed_labels[-n_new_points:]
+
+                mu, Su, Zopt = osgpr_utils.get_mu_su(model)
+
+                x_free = tf.placeholder('float64')
+                model.kern.make_tf_array(x_free)
+                X_tf = tf.placeholder('float64')
+                with model.kern.tf_mode():
+                    Kaa = tf.Session().run(
+                        model.kern.K(X_tf),
+                        feed_dict={x_free: model.kern.get_free_state(), X_tf: model.Z.value})
+
+                Zinit = osgpr_utils.init_Z(Zopt, new_gp_input, use_old_Z=False)
+
+                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(1), mu, Su, Kaa, Zopt, Zinit)
+                new_model.likelihood.variance = model.likelihood.variance.value
+                new_model.kern.variance = model.kern.variance.value
+                new_model.kern.lengthscales = model.kern.lengthscales.value
+                model = new_model
+                model.optimize(disp=1)
+
+            mu, var = model.predict_f(features)
+            mu = np.squeeze(mu)
+            sigma = np.squeeze(np.sqrt(var))
+        else:
+            raise NotImplementedError("This model hasn't been implemented yet")
+
         # print("mu", mu)
         # print("sigma", sigma)
         max_inds = top_N_ucb(mu, sigma) # this is the indexes of the predicted question that the user will answer
@@ -215,8 +272,14 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
         assert(np.all(training_set_for_gp.columns == features.columns))
 
+        n_new_points = training_set_for_gp.shape[0]
         training_set_for_gp = pd.concat([training_set_for_gp, question_features_to_save])
-        observed_labels.extend(labels_to_save)
+        if model_choice == "osgpr":
+            #Turn boolean into 0 and 1
+            labels_to_save = np.array([1.0 if i else 0.0 for i in labels_to_save])[:, np.newaxis]
+            observed_labels = np.concatenate((observed_labels, labels_to_save))
+        else:
+            observed_labels.extend(labels_to_save)
 
         assert(len(training_set_for_gp) == len(observed_labels))
 

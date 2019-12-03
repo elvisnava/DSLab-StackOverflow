@@ -6,6 +6,7 @@ cache/
 testing_sample.csv
 *.py[cod]
 *.so
+venv/
 
 Baselines/custom_lda/_custom_lda.c
 Baselines/custom_lda/_custom_lda.html
