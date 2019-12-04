@@ -9,13 +9,14 @@ import scipy
 import readability
 import re
 
+from collections import defaultdict
+
 pd.set_option('mode.chained_assignment', 'raise')
 
 import custom_lda
 
 cache_dir = "../cache/"
 raw_question_features_path = os.path.join(cache_dir, "ttm_elvis_raw_question_features.pickle")
-tag_popularity_dic = os.path.join(cache_dir, "tag_popularity.json")
 
 class GP_Feature_Collection:
 
@@ -76,7 +77,7 @@ class GP_Features_user(GP_Features):
     Implements features of both users, the answerer and the asker
     """
     def __init__(self, timedelta_wait=timedelta(days=2), feat_names=["num_posts", "num_answers", "num_questions", "answer_score", "question_score"]):
-        self.user_features = dict()
+        self.user_features = defaultdict(list)
         self.timedelta_wait = timedelta_wait
         self.feat_names = feat_names
 
@@ -90,16 +91,10 @@ class GP_Features_user(GP_Features):
 
         # answerer features
         answerer_feats = [event.answer_date, 1,1,0,event.answer_score, 0] # , is_acc_ans, 0]
-        if event.answerer_user_id not in self.user_features:
-            self.user_features[event.answerer_user_id] = [answerer_feats]
-        else:
-            self.user_features[event.answerer_user_id].append(answerer_feats)
+        self.user_features[event.answerer_user_id].append(answerer_feats)
         # asker features
         asker_feats = [event.question_date,1,0,1,0,event.question_score] # , 0, has_acc_ans]
-        if event.asker_user_id not in self.user_features:
-            self.user_features[event.asker_user_id] = [asker_feats]
-        else:
-            self.user_features[event.asker_user_id].append(asker_feats)
+        self.user_features[event.asker_user_id].append(asker_feats)
 
     def compute_features(self, user_id, questions, event_time=None):
         # filter the answerer features
@@ -128,12 +123,12 @@ class GP_Features_user(GP_Features):
         helper function to return the accumulated features if the date is more than 2 days old
         @param user_feats: the raw feature vector [answer_date or question_date, num_posts, num_answers, ... etc]
         """
-        if event_time is not None:
-            user_feats_filter = [v[1:] for v in user_feats if (event_time - v[0]) >= self.timedelta_wait]
-        else:
-            user_feats_filter = [v[1:] for v in user_feats]
-        if len(user_feats_filter)==0: # all of them were filtered out
-            return([0 for _ in range(len(self.feat_names))])
+        user_feats_filter = []
+        for v in user_feats:
+            if event_time is not None and (event_time - v[0]) < self.timedelta_wait:
+                user_feats_filter.append(v[1:4]+[0,0])
+            else:
+                user_feats_filter.append(v[1:])
         user_feats_filter = np.sum(np.asarray(user_feats_filter), axis=0)
         return user_feats_filter.tolist()
 
@@ -143,19 +138,18 @@ class GP_Features_affinity(GP_Features):
     Implents user-question pair features based on tags
     """
     def __init__(self):
-        self.user_tags = dict()
+        self.user_tags = defaultdict(str)
+        self.questions_asked = defaultdict(list)
 
     def update_event(self, event):
         # add tags to answerer
-        if event.answerer_user_id not in self.user_tags:
-            self.user_tags[event.answerer_user_id] = event.question_tags
-        else:
-            self.user_tags[event.answerer_user_id] += event.question_tags # append to string
+        self.user_tags[event.answerer_user_id] += event.question_tags # append to string
         # add tags to asker
-        if event.asker_user_id not in self.user_tags:
-            self.user_tags[event.asker_user_id] = event.question_tags
-        else:
-            self.user_tags[event.asker_user_id] += event.question_tags # append to string
+        if event.question_id not in self.questions_asked[event.asker_user_id]: # if it is a new question asked by that user
+            self.user_tags[event.asker_user_id] += event.question_tags
+        # remember that this question was asked by the asker
+        self.questions_asked[event.asker_user_id].append(event.question_id)
+
  
     def compute_features(self, user_id, questions, event_time=None):
         if user_id not in self.user_tags:
@@ -191,22 +185,20 @@ class GP_Features_Question(GP_Features):
     """
     Implements readability and thread features of the question
     """
-    def __init__(self):
-        self.question_thread = dict()
-        # TODO: instead of loading the precomputed one, add tags with event_update 
-        with open(tag_popularity_dic, "r") as infile:
-            self.tag_popularity = json.load(infile)
+    def __init__(self, timedelta_wait=timedelta(days=2)):
+        self.timedelta_wait = timedelta_wait
+        self.question_thread = defaultdict(list)
+        self.all_tags = ''
 
     def update_event(self, event):
         # * readability features only need to be computed with the question body
         # * for thread features, add answer to the question with features
         # [num_answers, score_sum, is_accepted]
-        # TODO: score okay to use?
-        if event.question_id not in self.question_thread:
-            self.question_thread[event.question_id] = [1, event.answer_score] # , is_acc TODO
-        else:
-            self.question_thread[event.question_id] += [1, event.answer_score] # 1 more answer, sum up the count
         
+        if len(self.question_thread[event.question_id])==0:
+            self.all_tags += event.question_tags # if question was not answered before, add tags to tag database
+        # TODO: acc_ans
+        self.question_thread[event.question_id].append([event.answer_date, 1, event.answer_score]) # 1 more answer, sum up the count
 
     def _cumulative_term_entropy(self, text):
         """
@@ -246,13 +238,9 @@ class GP_Features_Question(GP_Features):
         num_answers = []
         score_sum = []
         for q_id, question in questions.iterrows():
-            if question.question_id in self.question_thread:
-                thread = self.question_thread[question.question_id]
-                num_answers.append(thread[0])
-                score_sum.append(thread[1])
-            else:
-                num_answers.append(0)
-                score_sum.append(0)
+            thread = self._filter_feats(self.question_thread[question.question_id], event_time)
+            num_answers.append(thread[0])
+            score_sum.append(thread[1])
 
         question_feats = read_feats.set_index(np.arange(len(questions)))
         question_feats.loc[:, "num_ans_thread"] = pd.Series(num_answers)
@@ -262,11 +250,37 @@ class GP_Features_Question(GP_Features):
         tag_popularity_sum = []
         for q_id, question in questions.iterrows():
             tag_list = question.question_tags[1:-1].split("><")
-            popularities = [self.tag_popularity[tag] for tag in tag_list]
+            occ_before = int(self.all_tags.count(question.question_tags) > 0) # question was answered before --> tags appear
+            popularities = [self.all_tags.count("<"+tag+">") - occ_before for tag in tag_list] # need to add <> again because otherwise r will be found lots of times
+            nr_all_tags = self.all_tags.count("><") + 1
+            popularities = np.asarray(popularities)/float(nr_all_tags)
             tag_popularity_sum.append(sum(popularities))
         question_feats.loc[:, "tag_popularity"] = pd.Series(tag_popularity_sum)
 
+        # add question age
+        question_dates = [pd.Timestamp(x) for x in questions["question_date"].values]
+        question_feats["question_age"] = [event_time - question_event_time for question_event_time in question_dates]
+        question_feats["question_age"] = (question_feats["question_age"].dt.days +  (question_feats["question_age"].dt.seconds)/(24*60*60))
+        
         return question_feats
+
+    def _filter_feats(self, question_thread, event_time=None):
+        """
+        helper function to return the accumulated features if the date is more than 2 days old
+        @param question_thread: the raw feature vector [timepoint, 1, score]
+        """
+        if len(question_thread)==0:
+            return [0,0] # question has not been answered before
+
+        # filter out the ones that are more less than two days old
+        filtered_thread = []
+        for q in question_thread:
+            if event_time is not None and (event_time - q[0]) < self.timedelta_wait:
+                filtered_thread.append([q[1], 0]) # set score to 0, delete first element since it is the timestamp
+            else:
+                filtered_thread.append(q[1:])
+        filtered_thread = np.sum(np.asarray(filtered_thread), axis=0)
+        return filtered_thread.tolist()
 
 
 class GP_Features_TTM(GP_Features):
