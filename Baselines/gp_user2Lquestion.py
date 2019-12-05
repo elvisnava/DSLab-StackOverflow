@@ -16,7 +16,7 @@ from sklearn.preprocessing import normalize, StandardScaler
 
 
 #Choose either "sklearn-GP" or "osgpr"
-model_choice = "sklearn-GP"
+model_choice = "osgpr"
 #For osgpr, M is the number of pseduo-points (for sparse approx)
 M_points = 100
 
