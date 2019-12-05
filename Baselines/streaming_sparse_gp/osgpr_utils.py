@@ -10,7 +10,6 @@ def get_mu_su(model):
     mu, Su = model.predict_f_full_cov(Zopt)
     if len(Su.shape) == 3:
         Su = Su[:, :, 0]
-        vx = vx[:, 0]
     return mu, Su, Zopt
 
 def init_Z(cur_Z, new_X, use_old_Z=True, first_batch=True):
