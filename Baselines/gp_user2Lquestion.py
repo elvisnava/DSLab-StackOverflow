@@ -180,17 +180,6 @@ print("{} pretraining examples".format(n_pretraining_samples))
 print(training_set_for_gp.shape)
 # print(observed_labels.shape)
 
-#With osgpr we pretrain immediately
-if model_choice == "osgpr":
-    persistent_scaler = StandardScaler()
-    gp_input = persistent_scaler.fit_transform(training_set_for_gp)
-    Z1 = gp_input[np.random.permutation(gp_input.shape[0])[0:M_points], :]
-    model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.RBF(1), Z=Z1)
-    model.likelihood.variance = 0.001
-    model.kern.variance = 1.0
-    model.kern.lengthscales = 0.8
-    model.optimize(disp=1)
-
 
 #With osgpr we pretrain immediately
 if model_choice == "osgpr":
