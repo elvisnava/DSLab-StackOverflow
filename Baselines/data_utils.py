@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import numpy as np
 import data
+import pandas as pd
 
 
 def make_datetime(s):
@@ -226,18 +227,34 @@ def all_answer_events_iterator(time_delta_scores_after_post, data_handle: data.D
     # , A.score as answer_score, Q.score as question_score <-- can't use final values for this
 
     print("Query for all events iterator >>>> \n {}".format(q))
-    all_answers = data_handle.query(q, use_macros=True)
+    raw_all_answers = data_handle.query(q, use_macros=True)
+
+    mask_negative_age = raw_all_answers.question_age_at_answer.dt.total_seconds() < 0
+    print("NOTE: {} questions where excluded because they have a negative question age".format(np.count_nonzero(mask_negative_age)))
+    _questions_with_neg_age = raw_all_answers[mask_negative_age]
+
+    all_answers = raw_all_answers[np.invert(mask_negative_age)]
 
 
-    scores_of_posts = data_handle.get_post_scores_fixed_time_after_post(time_delta_scores_after_post)
 
+    scores_of_posts = data_handle.get_post_scores_fixed_time_after_post(time_delta_scores_after_post).loc[:, ["post_id", "score"]]
 
+    question_scores = scores_of_posts.rename(columns=dict(post_id='question_id', score='question_score'))
+    answer_scores = scores_of_posts.rename(columns=dict(post_id='answer_id', score='answer_score'))
+
+    final = all_answers.merge(question_scores, on='question_id', how='left').merge(answer_scores, on='answer_id', how='left')
+
+    final.loc[final.question_score.isnull(), "question_score"] = 0
+    final.loc[final.answer_score.isnull(), "answer_score"] = 0
 
     print("all_answer_events_iterator will go through {} events until {}".format(len(all_answers), all_answers.answer_date.max()))
 
+    all_answers = None
+    dataframe_to_iterate_over = final
+
     last_date = make_datetime('01.01.1900 00:00')
-    for i in range(len(all_answers)):
-        current = all_answers.iloc[i]
+    for i in range(len(dataframe_to_iterate_over)):
+        current = dataframe_to_iterate_over.iloc[i]
         event_date = current.answer_date
 
         assert(last_date < event_date)

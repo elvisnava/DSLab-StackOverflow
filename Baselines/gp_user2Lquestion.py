@@ -31,11 +31,16 @@ hour_threshold_suggested_answer = 24
 sigma = 1
 beta = 0.4
 n_preds = 5
+time_delta_scores_after_posts = timedelta(days=2)
+
+filter_nan_asker = True
+filter_nan_answerer = True # i.e. skip events where asker or answerer field is empty. Also candidate questions with empty akser id will be ignored
+only_open_questions_suggestable = False # if True candidate questions only contain questions which have no accepted answer at event time -> some people answer questions that already have an accepted answer
 
 save_n_negative_suggestons = 1
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = True
+redo_pretraining = False
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
@@ -43,9 +48,17 @@ data_handle = data.Data()
 def is_user_answers_suggested_event(event):
     return event.question_age_at_answer <= timedelta(hours=hour_threshold_suggested_answer)
 
-def get_suggestable_questions(time):
-    open_questions = cached_data.existing_questions_at_time(time)
-    mask = (open_questions.question_date >= time - timedelta(hours=hour_threshold_suggested_answer))
+def get_suggestable_questions(time, filter_nan_asker_id=filter_nan_asker):
+
+    open_questions = cached_data.existing_questions_at_time(time, only_open_questions=only_open_questions_suggestable)
+    mask_young_enough = (open_questions.question_date >= time - timedelta(hours=hour_threshold_suggested_answer))
+
+    if filter_nan_asker_id:
+        mask_known_asker = open_questions.question_owner_user_id.notnull()
+        mask = mask_young_enough & mask_known_asker
+    else:
+        mask = mask_young_enough
+
     return open_questions[mask]
 
 def optimising_dummy_func(obj_func, initial_theta, bounds):
@@ -109,7 +122,10 @@ def pretrain_gp_ucp(feature_collection, start_time, end_time):
 
     n_candidates_collector = list()
 
-    for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time, end_time=end_time)):
+    for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time, end_time=end_time, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)):
+        assert(not np.isnan(event.answerer_user_id))
+        assert(not np.isnan(event.asker_user_id))
+
         if i%100 ==0 :
             avg_candidates = np.mean(n_candidates_collector)
             print("Preptraining at {}| on average {} candidates in the last {} suggested_question_events".format(event.answer_date, avg_candidates, len(n_candidates_collector)))
@@ -128,6 +144,11 @@ def pretrain_gp_ucp(feature_collection, start_time, end_time):
             feats = feature_collection.compute_features(event.answerer_user_id, suggestable_questions, event.answer_date)
             label = suggestable_questions.question_id.values == event.question_id
 
+
+            assert(np.any(label))
+            assert(np.all(suggestable_questions.question_owner_user_id.notnull()))
+
+
             all_feates_collector.append(feats)
             all_label_collector.append(label)
 
@@ -141,7 +162,8 @@ def pretrain_gp_ucp(feature_collection, start_time, end_time):
     return feature_collection, (all_feats, all_label)
 
 if redo_pretraining:
-    pretraining_result = pretrain_gp_ucp(all_features_collection_raw, start_time=None, end_time=start_time_online_learning)
+    st = data_utils.make_datetime("27.07.2010 17:06") #TODO wrong
+    pretraining_result = pretrain_gp_ucp(all_features_collection_raw, start_time=st, end_time=start_time_online_learning)
     with open(pretraining_cache_file, "wb") as f:
         pickle.dump(pretraining_result, f)
 else:
@@ -156,7 +178,7 @@ if model_choice == "osgpr":
 n_pretraining_samples = len(training_set_for_gp)
 print("{} pretraining examples".format(n_pretraining_samples))
 print(training_set_for_gp.shape)
-print(observed_labels.shape)
+# print(observed_labels.shape)
 
 #With osgpr we pretrain immediately
 if model_choice == "osgpr":
@@ -190,8 +212,10 @@ info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_ca
 debug_all_questions_used_by_gp =list()
 n_new_points = 0
 
-for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, start_time=start_time_online_learning)):
+for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time_online_learning, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)):
 
+    assert(not np.isnan(event.answerer_user_id))
+    assert(not np.isnan(event.asker_user_id))
 
     if not is_user_answers_suggested_event(event):
         # Don't just update the coupe, also add to the df as observation
@@ -207,6 +231,10 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
             warnings.warn("For answer id {} (to question {}) there was not a single suggestable question".format(event.answer_id, event.question_id))
             continue
 
+
+        assert(np.all(suggestable_questions.question_owner_user_id.notnull()))
+        assert(np.any(suggestable_questions.question_id == actually_answered_id))
+
         # compute features
         features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
         # previous version: (I changed it because it is not necessary to give a list of target_user_id)
@@ -221,6 +249,8 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
             mu, sigma = gpr.predict(features, return_std=True)
         elif model_choice == "osgpr":
             #If we added new points, do an online update
+
+            print("n_new_points right before condition: {}".format(n_new_points))
             if n_new_points > 0:
                 new_gp_input = persistent_scaler.transform(training_set_for_gp[-n_new_points:])
                 new_observed_labels = observed_labels[-n_new_points:]
@@ -322,7 +352,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
             print('label', suggested_questions_label)
             print_intermediate_info(info_dict, event.answer_date)
 
-    if i % 1000 == 0:
+    if i % 1000 == 0 and i>100:
         if len(debug_all_questions_used_by_gp) != 0:
             debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
             assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
