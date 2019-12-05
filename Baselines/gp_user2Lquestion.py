@@ -14,15 +14,17 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
 from sklearn.preprocessing import normalize, StandardScaler
 
-import tensorflow as tf
-import gpflow as GPflow
-import streaming_sparse_gp.osgpr as osgpr
-import streaming_sparse_gp.osgpr_utils as osgpr_utils
 
 #Choose either "sklearn-GP" or "osgpr"
-model_choice = "osgpr"
+model_choice = "sklearn-GP"
 #For osgpr, M is the number of pseduo-points (for sparse approx)
 M_points = 100
+
+if model_choice == "osgpr":
+    import tensorflow as tf
+    import gpflow as GPflow
+    import streaming_sparse_gp.osgpr as osgpr
+    import streaming_sparse_gp.osgpr_utils as osgpr_utils
 
 start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
 hour_threshold_suggested_answer = 24
@@ -33,7 +35,7 @@ n_preds = 5
 save_n_negative_suggestons = 1
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = False
+redo_pretraining = True
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
@@ -42,7 +44,7 @@ def is_user_answers_suggested_event(event):
     return event.question_age_at_answer <= timedelta(hours=hour_threshold_suggested_answer)
 
 def get_suggestable_questions(time):
-    open_questions = cached_data.open_questions_at_time(time)
+    open_questions = cached_data.existing_questions_at_time(time)
     mask = (open_questions.question_date >= time - timedelta(hours=hour_threshold_suggested_answer))
     return open_questions[mask]
 

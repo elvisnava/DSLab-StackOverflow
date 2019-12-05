@@ -1,6 +1,6 @@
 import unittest
 import data
-from datetime import date
+from datetime import date, timedelta
 import data_utils
 from data_utils import make_datetime
 import numpy as np
@@ -107,7 +107,7 @@ class Test_Data(unittest.TestCase):
 
     def test_questions_at_time(self):
         dh_cached = data.DataHandleCached()
-        a1 = dh_cached.open_questions_at_time(make_datetime("23.05.2015 12:12"))
+        a1 = dh_cached.existing_questions_at_time(make_datetime("23.05.2015 12:12"))
         pass
 
     def test_get_answers(self):
@@ -143,4 +143,13 @@ class Test_Data(unittest.TestCase):
 
     def test_user_reputations(self):
         rep = self.data.user_reputations()
+        pass
+
+
+    def test_score_at_time(self):
+        self.data.set_time_range(None, None)
+
+        delta = timedelta(days=2)
+
+        ans = self.data.get_post_scores_fixed_time_after_post(delta)
         pass

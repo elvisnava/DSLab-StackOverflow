@@ -4,6 +4,7 @@ import pandas as pd
 import re
 import copy
 import warnings
+from datetime import timedelta
 
 class Data:
     """note that all operations of this class should only return data in the time range set with 'set_time_range' """
@@ -59,8 +60,21 @@ class Data:
 
         return all_views
 
-    def get_users_with_tags(self):
-        pass
+    def get_post_scores_fixed_time_after_post(self, time_delta):
+
+        n_hours = int(time_delta / timedelta(hours=1))
+
+        time_delta_str = "interval '{} hours'".format(n_hours)
+        q = """
+            SELECT Votes.PostId as post_id, count(*) filter (where Votes.VoteTypeId = 2) as n_upvotes, count(*) filter (where Votes.VoteTypeId = 3) as n_downvotes, count(*) as all_votes
+            FROM Votes JOIN Posts on Posts.Id = Votes.PostId
+            WHERE (Votes.CreationDate - Posts.CreationDate) <= {} 
+            GROUP BY Votes.PostId       
+        """.format(time_delta_str)
+
+        result = self.query(q)
+        result.loc[:, "score"] = result.n_upvotes - result.n_downvotes
+        return result
 
     def get_tables(self):
         query = "SELECT * FROM pg_catalog.pg_tables WHERE schemaname='public';"
@@ -283,12 +297,12 @@ class DataHandleCached:
 
     def _compute_all_question(self):
         self._all_questions = self.data_handle.query("""
-        SELECT Q.Id as question_id, Q.CreationDate as question_date, Q.body as question_body, Q.OwnerUserId as question_owner_user_id, Q.Title as question_title, Q.Tags as Question_tags, Q.ClosedDate as question_closed_date, AcceptedAns.CreationDate as date_of_accepted_ans
+        SELECT Q.Id as question_id, Q.CreationDate as question_date, Q.body as question_body, Q.OwnerUserId as question_owner_user_id, Q.Title as question_title, Q.Tags as Question_tags , Q.ClosedDate as question_closed_date, AcceptedAns.CreationDate as date_of_accepted_ans
         FROM Posts Q LEFT JOIN Posts AcceptedAns ON Q.AcceptedAnswerId = AcceptedAns.Id
         WHERE Q.PostTypeId = {questionPostType}
         """, use_macros=True)
 
-    def open_questions_at_time(self, time, target_id = None):
+    def existing_questions_at_time(self, time, only_open_questions=True, target_id = None):
         """
         Return all questions that don't have an accepted answer yet at <time>
 
@@ -299,9 +313,13 @@ class DataHandleCached:
         q = self.all_questions
 
         mask_already_exits = (q.question_date <= time)
-        mask_no_accepted_answer_yet = (q.date_of_accepted_ans >= time) | (q.date_of_accepted_ans.isnull())
 
-        out =  q[mask_already_exits & mask_no_accepted_answer_yet]
+        if only_open_questions:
+            mask_no_accepted_answer_yet = (q.date_of_accepted_ans >= time) | (q.date_of_accepted_ans.isnull())
+
+            out = q[mask_already_exits & mask_no_accepted_answer_yet]
+        else:
+            out = q[mask_already_exits]
 
         if (target_id is not None) and (np.count_nonzero(target_id== out.question_id) == 0):
             no_accepted_yet = mask_no_accepted_answer_yet[q.question_id == target_id]

@@ -135,7 +135,7 @@ def user_answers_young_question_event_iterator_with_candidates(data_cache: data.
 
     for (event_date, user_id, actually_answered_id) in user_answers_young_question_event_iterator(data.Data(), hour_threshold=hour_threshold, start_time=start_time):
 # TODO get young candidates
-        open_questions = data_cache.open_questions_at_time(event_date, actually_answered_id)
+        open_questions = data_cache.existing_questions_at_time(event_date, actually_answered_id)
 
         young_open_questions_at_the_time = open_questions[open_questions.question_date >= (event_date - timedelta(hours=hour_threshold))]
 
@@ -178,7 +178,8 @@ def user_answers_young_question_event_iterator(data_handle: data.Data, hour_thre
         yield sample
 
 
-def all_answer_events_iterator(data_handle: data.Data=None, start_time = None, end_time=None):
+
+def all_answer_events_iterator(time_delta_scores_after_post, data_handle: data.Data=None,  start_time = None, end_time=None, filter_empty_asker=True, filter_empty_target_user=True):
     """
     Iterator over events where a user answers a question
     :param data_handle:
@@ -190,20 +191,47 @@ def all_answer_events_iterator(data_handle: data.Data=None, start_time = None, e
 
     data_handle.set_time_range(start=None, end=None)
 
-    start_time_cond = ""
+    additional_conds = list()
+
     if start_time:
-        start_time_cond = "AND A.CreationDate >= date '{}' ".format(start_time)
+        start_time_cond = "A.CreationDate >= date '{}' ".format(start_time)
+        additional_conds.append(start_time_cond)
 
-    end_time_cond = ""
     if end_time:
-        end_time_cond = "AND A.CreationDate < date '{}'".format(end_time)
+        end_time_cond = "A.CreationDate < date '{}'".format(end_time)
+        additional_conds.append(end_time_cond)
 
-    all_answers = data_handle.query("""
-    SELECT Q.Id as question_id, A.Id as answer_id, Q.OwnerUserId as asker_user_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date, A.score as answer_score, Q.score as question_score
+    if filter_empty_asker:
+        additional_conds.append("Q.OwnerUserId IS NOT NULL ")
+    if filter_empty_target_user:
+        additional_conds.append("A.OwnerUserId IS NOT NULL ")
+
+
+
+
+
+    if len(additional_conds) > 0:
+        additional_conds_string = " AND " + " AND ".join(additional_conds)
+    else:
+        additional_conds_string = ""
+
+
+
+    q = """
+    SELECT Q.Id as question_id, A.Id as answer_id, Q.OwnerUserId as asker_user_id, A.OwnerUserId as answerer_user_id, Q.body as question_body, Q.tags as question_tags, (A.CreationDate - Q.CreationDate) as question_age_at_answer, Q.CreationDate as question_date, A.CreationDate as answer_date
     FROM Posts AS A JOIN Posts as Q on A.ParentId = Q.Id
-    WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} {} {}
+    WHERE A.PostTypeId = {{answerPostType}} AND Q.PostTypeId = {{questionPostType}} {} 
     ORDER BY A.CreationDate
-    """.format(start_time_cond, end_time_cond), use_macros=True)
+    """.format(additional_conds_string)
+    # , A.score as answer_score, Q.score as question_score <-- can't use final values for this
+
+    print("Query for all events iterator >>>> \n {}".format(q))
+    all_answers = data_handle.query(q, use_macros=True)
+
+
+    scores_of_posts = data_handle.get_post_scores_fixed_time_after_post(time_delta_scores_after_post)
+
+
 
     print("all_answer_events_iterator will go through {} events until {}".format(len(all_answers), all_answers.answer_date.max()))
 
