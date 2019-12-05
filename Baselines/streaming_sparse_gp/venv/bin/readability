@@ -1,0 +1,3 @@
+#!/home/elvis/MEGA/ETH/Projects/DSLab/DSLab-StackOverflow/Baselines/streaming_sparse_gp/venv/bin/python3
+import readability
+readability.main()

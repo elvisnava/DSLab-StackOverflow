@@ -1,4 +1,3 @@
-
 import pandas
 import data
 import data_utils
@@ -9,6 +8,7 @@ from datetime import timedelta
 import numpy as np
 import warnings
 import pickle
+import scipy
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
@@ -155,6 +155,8 @@ if model_choice == "osgpr":
     observed_labels = np.array([1.0 if i else 0.0 for i in observed_labels])[:, np.newaxis]
 n_pretraining_samples = len(training_set_for_gp)
 print("{} pretraining examples".format(n_pretraining_samples))
+print(training_set_for_gp.shape)
+print(observed_labels.shape)
 
 #With osgpr we pretrain immediately
 if model_choice == "osgpr":
@@ -167,6 +169,21 @@ if model_choice == "osgpr":
     model.kern.lengthscales = 0.8
     model.optimize(disp=1)
 
+
+#With osgpr we pretrain immediately
+if model_choice == "osgpr":
+    persistent_scaler = StandardScaler()
+    gp_input = persistent_scaler.fit_transform(training_set_for_gp)
+    Z1 = gp_input[np.random.permutation(gp_input.shape[0])[0:M_points], :]
+    #model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.RBF(gp_input.shape[1], ARD=True), Z=Z1)
+    #model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.Linear(gp_input.shape[1], ARD=True), Z=Z1)
+    model = GPflow.sgpr.SGPR(gp_input, observed_labels, osgpr_utils.CustLinearKernel(gp_input.shape[1], alpha=1e-5, ARD=True), Z=Z1)
+    model.likelihood.variance = 0.001
+    #model.kern.variance = 1.0
+    model.kern.variance = np.ones(gp_input.shape[1])
+    #model.kern.lengthscales = np.ones(gp_input.shape[1]) * 0.8
+    model.optimize(disp=1, maxiter=20)
+    #model.optimize(method=tf.train.AdamOptimizer(), maxiter=100)
 
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
 
@@ -220,12 +237,15 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
 
                 Zinit = osgpr_utils.init_Z(Zopt, new_gp_input, use_old_Z=False)
 
-                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(1), mu, Su, Kaa, Zopt, Zinit)
+                #new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
+                #new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.Linear(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
+                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, osgpr_utils.CustLinearKernel(gp_input.shape[1], alpha=1e-5, ARD=True), mu, Su, Kaa, Zopt, Zinit)
                 new_model.likelihood.variance = model.likelihood.variance.value
                 new_model.kern.variance = model.kern.variance.value
-                new_model.kern.lengthscales = model.kern.lengthscales.value
+                #new_model.kern.lengthscales = model.kern.lengthscales.value
                 model = new_model
-                model.optimize(disp=1)
+                model.optimize(disp=1, maxiter=5)
+                #model.optimize(method=tf.train.AdamOptimizer(), maxiter=100)
 
             mu, var = model.predict_f(features)
             mu = np.squeeze(mu)
@@ -296,7 +316,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
         # print('pred rank', info_dict['predicted_rank'])
 
 
-        if i%100==0:
+        if i%1==0:
             print('mu', mu)
             print('sigma', sigma)
             print('label', suggested_questions_label)
@@ -307,7 +327,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(data_handle, sta
             debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
             assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
             debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
-            debug_all_questions_used_by_gp.to_csv("events_used_by_gp.csv")
+            pd.DataFrame(debug_all_questions_used_by_gp).to_csv("events_used_by_gp.csv")
             training_set_for_gp.to_csv("training_set_for_gp.csv")
             gp_info_dict = pd.DataFrame(data = info_dict)
             gp_info_dict.to_csv("gp_run_info_dict.csv")
