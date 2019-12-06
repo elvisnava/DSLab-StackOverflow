@@ -9,16 +9,26 @@ import numpy as np
 import warnings
 import pickle
 import scipy
+import argparse
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
 from sklearn.preprocessing import normalize, StandardScaler
 
+from gp_utils import *
+
+parser = argparse.ArgumentParser(description="Runs the online GP")
+parser.add_argument("--model", dest="model_choice", default="osgpr", metavar="model_name"
+                    help="Choose model from: osgpr, sklearn-GP")
+parser.add_argument("-m", dest="m", default=100, metavar="M",
+                    help="Number of pseudo-points (for osgpr)")
+
+args = parser.parse_args()
 
 #Choose either "sklearn-GP" or "osgpr"
-model_choice = "osgpr"
-#For osgpr, M is the number of pseduo-points (for sparse approx)
-M_points = 100
+model_choice = args.model_choice
+#For osgpr, M is the number of pseudo-points (for sparse approx)
+M_points = args.m
 
 if model_choice == "osgpr":
     import tensorflow as tf
@@ -26,7 +36,7 @@ if model_choice == "osgpr":
     import streaming_sparse_gp.osgpr as osgpr
     import streaming_sparse_gp.osgpr_utils as osgpr_utils
 
-start_time_online_learning =  data_utils.make_datetime("01.01.2012 00:01")
+start_time_online_learning =  data_utils.make_datetime("01.01.2015 00:01")
 hour_threshold_suggested_answer = 24
 sigma = 1
 beta = 0.4
@@ -38,6 +48,10 @@ filter_nan_answerer = True # i.e. skip events where asker or answerer field is e
 only_open_questions_suggestable = False # if True candidate questions only contain questions which have no accepted answer at event time -> some people answer questions that already have an accepted answer
 
 save_n_negative_suggestons = 1
+
+#Set to true if I always want to update the features "correctly" despite the suggestions
+#(less divergent simulation)
+always_update_features = True
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
 redo_pretraining = False
@@ -64,121 +78,11 @@ all_events_pretraining_dataframe = all_events_dataframe[all_events_dataframe.ans
 all_events_main_timewindow = all_events_dataframe[all_events_dataframe.answer_date >= start_time_online_learning]
 
 
-def is_user_answers_suggested_event(event):
-    return event.question_age_at_answer <= timedelta(hours=hour_threshold_suggested_answer)
-
-def get_suggestable_questions(time, filter_nan_asker_id=filter_nan_asker):
-
-    open_questions = cached_data.existing_questions_at_time(time, only_open_questions=only_open_questions_suggestable)
-    mask_young_enough = (open_questions.question_date >= time - timedelta(hours=hour_threshold_suggested_answer))
-
-    if filter_nan_asker_id:
-        mask_known_asker = open_questions.question_owner_user_id.notnull()
-        mask = mask_young_enough & mask_known_asker
-    else:
-        mask = mask_young_enough
-
-    return open_questions[mask]
-
-def optimising_dummy_func(obj_func, initial_theta, bounds):
-    func_val = obj_func(initial_theta)
-    return initial_theta, func_val
-
-
-def argmax_ucb(mu, sigma, beta):
-    return np.argmax(mu + sigma * np.sqrt(beta))
-
-def mrr_gp(ranks):
-    inv = 1/ranks
-    inv[inv<0] = 0
-    return np.mean(inv)
-
-def compute_chance_success(n_candidates_list, n=n_preds):
-    p = n/np.array(n_candidates_list)
-    p[p>1] = 1 # if there n_preds smaller then candidate list
-    return np.mean(p)
-
-def print_intermediate_info(info_dict, current_time):
-    if len(info_dict['event_time'])==0:
-        print("empty info dict")
-        return
-
-    last_n = 10
-
-    avg_candidates = np.mean(np.array(info_dict["n_candidates"])[-last_n:])
-    most_recent_time = info_dict['event_time'][-1]
-
-    percent_success = np.mean(np.array(info_dict['predicted_rank'][-last_n:]) != -1)
-
-    chance_success = compute_chance_success(info_dict["n_candidates"][-last_n:])
-
-    s = "{} | number of average candidates: {:.1f} | fraction_success : {:.3f} | chance_level success: {:.3f}".format(
-        current_time, avg_candidates, percent_success, chance_success)
-    print(s)
-
-
-
-
-def top_N_ucb(mu, sigma, beta=beta, n=n_preds):
-    upper_bounds = mu + sigma * np.sqrt(beta)
-    # ids = utils.get_ids_of_N_largest(upper_bounds, n)
-    sorted_ids = np.argsort(-upper_bounds)[:n]
-    return sorted_ids # first is actually the one with the highest prediction
-
-
 all_features_collection_raw = gp_features.GP_Feature_Collection(
     gp_features.GP_Features_affinity(),
     gp_features.GP_Features_TTM(),
     gp_features.GP_Features_Question(),
     gp_features.GP_Features_user())
-
-
-def pretrain_gp_ucp(feature_collection, start_time, end_time):
-
-    all_feates_collector = list()
-    all_label_collector = list() # list of 1d numpy arrays
-
-
-    n_candidates_collector = list()
-
-    for i, (_rowname, event) in enumerate(all_events_pretraining_dataframe.iterrows()):
-        assert(not np.isnan(event.answerer_user_id))
-        assert(not np.isnan(event.asker_user_id))
-
-        if i%100 ==0 :
-            avg_candidates = np.mean(n_candidates_collector)
-            print("Preptraining at {}| on average {} candidates in the last {} suggested_question_events".format(event.answer_date, avg_candidates, len(n_candidates_collector)))
-            n_candidates_collector = list()
-
-        if not is_user_answers_suggested_event(event):
-            feature_collection.update_pos_event(event)
-        else:
-            suggestable_questions = get_suggestable_questions(event.answer_date)
-            if len(suggestable_questions) ==0:
-                warnings.warn("For answer id {} (to question {}) there was not a single suggestable question".format(event.answer_id, event.question_id))
-                continue
-
-            n_candidates_collector.append(len(suggestable_questions))
-
-            feats = feature_collection.compute_features(event.answerer_user_id, suggestable_questions, event.answer_date)
-            label = suggestable_questions.question_id.values == event.question_id
-
-
-            assert(np.any(label))
-            assert(np.all(suggestable_questions.question_owner_user_id.notnull()))
-
-
-            all_feates_collector.append(feats)
-            all_label_collector.append(label)
-
-            # TODO I don't update the negative event here
-
-            feature_collection.update_pos_event(event)
-
-    all_feats = pd.concat(all_feates_collector, axis=0)
-    all_label = np.concatenate(all_label_collector, axis=0).tolist()
-
-    return feature_collection, (all_feats, all_label)
 
 if redo_pretraining:
     st = data_utils.make_datetime("27.07.2010 17:06") #TODO wrong
@@ -312,6 +216,10 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
                 # this suggested question was not answered
                 all_features_collection.update_neg_event(event) # i think all features so far ignore this
 
+        #If I always compute all feats anyway, I check if I haven't yet and I do it
+        if always_update_features and rank_of_true_question == -1:
+            all_features_collection.update_pos_event(event)
+
 
         # update training_data for gaaussian process
 
@@ -355,7 +263,7 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         # print('pred rank', info_dict['predicted_rank'])
 
 
-        if i%1==0:
+        if i%10==0:
             print('mu', mu)
             print('sigma', sigma)
             print('label', suggested_questions_label)
