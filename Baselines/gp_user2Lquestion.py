@@ -41,10 +41,14 @@ hour_threshold_suggested_answer = 24
 sigma = 1
 beta = 0.4
 n_preds = 5
-time_delta_scores_after_posts = timedelta(days=2)
 
+## The following flags only take affect if you redo the all_events.pickle file. i.e. redo_database_dumps =True
+time_delta_scores_after_posts = timedelta(days=2) # only takes affect with new database
 filter_nan_asker = True
 filter_nan_answerer = True # i.e. skip events where asker or answerer field is empty. Also candidate questions with empty akser id will be ignored
+#####
+
+
 only_open_questions_suggestable = False # if True candidate questions only contain questions which have no accepted answer at event time -> some people answer questions that already have an accepted answer
 
 save_n_negative_suggestons = 1
