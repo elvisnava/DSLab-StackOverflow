@@ -40,10 +40,29 @@ only_open_questions_suggestable = False # if True candidate questions only conta
 save_n_negative_suggestons = 1
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = True
+redo_pretraining = False
 
-cached_data = data.DataHandleCached()
-data_handle = data.Data()
+all_events_file = "../cache/gp/all_events.pickle"
+cached_data_file = "../cache/gp/cached_data.pickle"
+redo_database_dumps = False
+
+if redo_database_dumps:
+    all_events_dataframe = data_utils.all_answer_events_dataframe(start_time=None, end_time=None, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)
+    all_events_dataframe.to_pickle(all_events_file)
+
+    cached_data = data.DataHandleCached()
+    with open(cached_data_file, "wb") as f:
+        pickle.dump(cached_data, f)
+else:
+    all_events_dataframe = pd.read_pickle(all_events_file)
+
+    with open(cached_data_file, "rb") as f:
+        cached_data = pickle.load(f)
+
+
+all_events_pretraining_dataframe = all_events_dataframe[all_events_dataframe.answer_date < start_time_online_learning]
+all_events_main_timewindow = all_events_dataframe[all_events_dataframe.answer_date >= start_time_online_learning]
+
 
 def is_user_answers_suggested_event(event):
     return event.question_age_at_answer <= timedelta(hours=hour_threshold_suggested_answer)
@@ -122,7 +141,7 @@ def pretrain_gp_ucp(feature_collection, start_time, end_time):
 
     n_candidates_collector = list()
 
-    for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time, end_time=end_time, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)):
+    for i, (_rowname, event) in enumerate(all_events_pretraining_dataframe.iterrows()):
         assert(not np.isnan(event.answerer_user_id))
         assert(not np.isnan(event.asker_user_id))
 
@@ -201,7 +220,7 @@ info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_ca
 debug_all_questions_used_by_gp =list()
 n_new_points = 0
 
-for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time_online_learning, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)):
+for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
 
     assert(not np.isnan(event.answerer_user_id))
     assert(not np.isnan(event.asker_user_id))

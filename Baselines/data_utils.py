@@ -180,7 +180,7 @@ def user_answers_young_question_event_iterator(data_handle: data.Data, hour_thre
 
 
 
-def all_answer_events_iterator(time_delta_scores_after_post, data_handle: data.Data=None,  start_time = None, end_time=None, filter_empty_asker=True, filter_empty_target_user=True):
+def all_answer_events_dataframe(time_delta_scores_after_post, data_handle: data.Data=None,  start_time = None, end_time=None, filter_empty_asker=True, filter_empty_target_user=True):
     """
     Iterator over events where a user answers a question
     :param data_handle:
@@ -206,9 +206,6 @@ def all_answer_events_iterator(time_delta_scores_after_post, data_handle: data.D
         additional_conds.append("Q.OwnerUserId IS NOT NULL ")
     if filter_empty_target_user:
         additional_conds.append("A.OwnerUserId IS NOT NULL ")
-
-
-
 
 
     if len(additional_conds) > 0:
@@ -251,6 +248,13 @@ def all_answer_events_iterator(time_delta_scores_after_post, data_handle: data.D
 
     all_answers = None
     dataframe_to_iterate_over = final
+
+
+    return dataframe_to_iterate_over
+
+
+def all_answer_events_iterator(time_delta_scores_after_post, data_handle: data.Data=None,  start_time = None, end_time=None, filter_empty_asker=True, filter_empty_target_user=True):
+    dataframe_to_iterate_over = all_answer_events_dataframe(time_delta_scores_after_post, data_handle, start_time, end_time, filter_empty_asker, filter_empty_target_user)
 
     last_date = make_datetime('01.01.1900 00:00')
     for i in range(len(dataframe_to_iterate_over)):

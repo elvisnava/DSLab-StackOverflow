@@ -290,13 +290,13 @@ class DataHandleCached:
         :param data_handle:
         """
         if data_handle is None:
-            self.data_handle = Data()
-        else:
-            self.data_handle = copy.deepcopy(data_handle)
+            data_handle = Data()
+
+        self._compute_all_question(data_handle)
 
 
-    def _compute_all_question(self):
-        self._all_questions = self.data_handle.query("""
+    def _compute_all_question(self, data_handle):
+        self._all_questions = data_handle.query("""
         SELECT Q.Id as question_id, Q.CreationDate as question_date, Q.body as question_body, Q.OwnerUserId as question_owner_user_id, Q.Title as question_title, Q.Tags as Question_tags , Q.ClosedDate as question_closed_date, AcceptedAns.CreationDate as date_of_accepted_ans
         FROM Posts Q LEFT JOIN Posts AcceptedAns ON Q.AcceptedAnswerId = AcceptedAns.Id
         WHERE Q.PostTypeId = {questionPostType}
@@ -334,7 +334,7 @@ class DataHandleCached:
     @property
     def all_questions(self):
         if not hasattr(self, "_all_questions"):
-            self._compute_all_question()
+            raise RuntimeError("it should haave been computed before")
 
         return self._all_questions
 
