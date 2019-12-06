@@ -40,7 +40,7 @@ only_open_questions_suggestable = False # if True candidate questions only conta
 save_n_negative_suggestons = 1
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = False
+redo_pretraining = True
 
 cached_data = data.DataHandleCached()
 data_handle = data.Data()
