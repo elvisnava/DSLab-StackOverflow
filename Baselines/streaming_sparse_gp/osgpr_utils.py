@@ -19,6 +19,9 @@ def init_Z(cur_Z, new_X, use_old_Z=True, first_batch=True):
         M = cur_Z.shape[0]
         M_old = int(0.7 * M)
         M_new = M - M_old
+        if new_X.shape[0] < M_new:
+            M_old = M - new_X.shape[0]
+            M_new = new_X.shape[0]
         old_Z = cur_Z[np.random.permutation(M)[0:M_old], :]
         new_Z = new_X[np.random.permutation(new_X.shape[0])[0:M_new], :]
         Z = np.vstack((old_Z, new_Z))
@@ -39,7 +42,7 @@ class CustLinearKernel(GPflow.kernels.Kern):
           which columns of X are used.
         """
         GPflow.kernels.Kern.__init__(self, input_dim, active_dims)
-        self.alpha = np.array(alpha, dtype='float64')
+        self.alpha = tf.constant(np.array(alpha, dtype='float64'))
         self.ARD = ARD
         if ARD:
             # accept float or array:

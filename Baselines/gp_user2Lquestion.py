@@ -193,7 +193,7 @@ if model_choice == "osgpr":
     #model.kern.variance = 1.0
     model.kern.variance = np.ones(gp_input.shape[1])
     #model.kern.lengthscales = np.ones(gp_input.shape[1]) * 0.8
-    model.optimize(disp=1, maxiter=20)
+    model.optimize(disp=1, maxiter=50)
     #model.optimize(method=tf.train.AdamOptimizer(), maxiter=100)
 
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
@@ -256,14 +256,15 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start
 
                 Zinit = osgpr_utils.init_Z(Zopt, new_gp_input, use_old_Z=False)
 
+                tf.reset_default_graph()
                 #new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
                 #new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.Linear(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
-                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, osgpr_utils.CustLinearKernel(gp_input.shape[1], alpha=1e-5, ARD=True), mu, Su, Kaa, Zopt, Zinit)
+                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, osgpr_utils.CustLinearKernel(new_gp_input.shape[1], alpha=1e-5, ARD=True), mu, Su, Kaa, Zopt, Zinit)
                 new_model.likelihood.variance = model.likelihood.variance.value
                 new_model.kern.variance = model.kern.variance.value
                 #new_model.kern.lengthscales = model.kern.lengthscales.value
                 model = new_model
-                model.optimize(disp=1, maxiter=5)
+                model.optimize(disp=1, maxiter=30)
                 #model.optimize(method=tf.train.AdamOptimizer(), maxiter=100)
 
             mu, var = model.predict_f(features)
@@ -313,7 +314,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start
 
         assert(np.all(training_set_for_gp.columns == features.columns))
 
-        n_new_points = training_set_for_gp.shape[0]
+        n_new_points = question_features_to_save.shape[0]
         training_set_for_gp = pd.concat([training_set_for_gp, question_features_to_save])
         if model_choice == "osgpr":
             #Turn boolean into 0 and 1
@@ -346,7 +347,7 @@ for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start
             debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
             assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
             debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
-            pd.DataFrame(debug_all_questions_used_by_gp).to_csv("events_used_by_gp.csv")
+            debug_used_questions.to_csv("events_used_by_gp.csv")
             training_set_for_gp.to_csv("training_set_for_gp.csv")
             gp_info_dict = pd.DataFrame(data = info_dict)
-            gp_info_dict.to_csv("gp_run_info_dict.csv")
+            gp_info_dict.to_csv("gp_run_info_dict_{}.csv".format(model_choice))
