@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
+from datetime import timedelta
 
-def is_user_answers_suggested_event(event):
+def is_user_answers_suggested_event(event, hour_threshold_suggested_answer):
     return event.question_age_at_answer <= timedelta(hours=hour_threshold_suggested_answer)
 
-def get_suggestable_questions(time, filter_nan_asker_id=filter_nan_asker):
+def get_suggestable_questions(time, cached_data, only_open_questions_suggestable, hour_threshold_suggested_answer, filter_nan_asker_id):
 
     open_questions = cached_data.existing_questions_at_time(time, only_open_questions=only_open_questions_suggestable)
     mask_young_enough = (open_questions.question_date >= time - timedelta(hours=hour_threshold_suggested_answer))
@@ -30,12 +31,12 @@ def mrr_gp(ranks):
     inv[inv<0] = 0
     return np.mean(inv)
 
-def compute_chance_success(n_candidates_list, n=n_preds):
+def compute_chance_success(n_candidates_list, n):
     p = n/np.array(n_candidates_list)
     p[p>1] = 1 # if there n_preds smaller then candidate list
     return np.mean(p)
 
-def print_intermediate_info(info_dict, current_time):
+def print_intermediate_info(info_dict, current_time, n_preds):
     if len(info_dict['event_time'])==0:
         print("empty info dict")
         return
@@ -47,7 +48,7 @@ def print_intermediate_info(info_dict, current_time):
 
     percent_success = np.mean(np.array(info_dict['predicted_rank'][-last_n:]) != -1)
 
-    chance_success = compute_chance_success(info_dict["n_candidates"][-last_n:])
+    chance_success = compute_chance_success(info_dict["n_candidates"][-last_n:], n_preds)
 
     s = "{} | number of average candidates: {:.1f} | fraction_success : {:.3f} | chance_level success: {:.3f}".format(
         current_time, avg_candidates, percent_success, chance_success)
@@ -56,13 +57,14 @@ def print_intermediate_info(info_dict, current_time):
 
 
 
-def top_N_ucb(mu, sigma, beta=beta, n=n_preds):
+def top_N_ucb(mu, sigma, beta, n):
     upper_bounds = mu + sigma * np.sqrt(beta)
     # ids = utils.get_ids_of_N_largest(upper_bounds, n)
     sorted_ids = np.argsort(-upper_bounds)[:n]
     return sorted_ids # first is actually the one with the highest prediction
 
-def pretrain_gp_ucp(feature_collection, start_time, end_time):
+def pretrain_gp_ucp(feature_collection, all_events_pretraining_dataframe, hour_threshold_suggested_answer, cached_data, only_open_questions_suggestable,
+                    filter_nan_asker_id, start_time, end_time):
 
     all_feates_collector = list()
     all_label_collector = list() # list of 1d numpy arrays
@@ -70,7 +72,7 @@ def pretrain_gp_ucp(feature_collection, start_time, end_time):
 
     n_candidates_collector = list()
 
-    for i, event in enumerate(data_utils.all_answer_events_iterator(start_time=start_time, end_time=end_time, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)):
+    for i, (_rowname, event) in enumerate(all_events_pretraining_dataframe.iterrows()):
         assert(not np.isnan(event.answerer_user_id))
         assert(not np.isnan(event.asker_user_id))
 
@@ -79,10 +81,10 @@ def pretrain_gp_ucp(feature_collection, start_time, end_time):
             print("Preptraining at {}| on average {} candidates in the last {} suggested_question_events".format(event.answer_date, avg_candidates, len(n_candidates_collector)))
             n_candidates_collector = list()
 
-        if not is_user_answers_suggested_event(event):
+        if not is_user_answers_suggested_event(event, hour_threshold_suggested_answer):
             feature_collection.update_pos_event(event)
         else:
-            suggestable_questions = get_suggestable_questions(event.answer_date)
+            suggestable_questions = get_suggestable_questions(event.answer_date, cached_data, only_open_questions_suggestable, hour_threshold_suggested_answer, filter_nan_asker_id)
             if len(suggestable_questions) ==0:
                 warnings.warn("For answer id {} (to question {}) there was not a single suggestable question".format(event.answer_id, event.question_id))
                 continue

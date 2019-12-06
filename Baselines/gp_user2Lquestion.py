@@ -18,7 +18,7 @@ from sklearn.preprocessing import normalize, StandardScaler
 from gp_utils import *
 
 parser = argparse.ArgumentParser(description="Runs the online GP")
-parser.add_argument("--model", dest="model_choice", default="osgpr", metavar="model_name"
+parser.add_argument("--model", dest="model_choice", default="osgpr", metavar="model_name",
                     help="Choose model from: osgpr, sklearn-GP")
 parser.add_argument("-m", dest="m", default=100, metavar="M",
                     help="Number of pseudo-points (for osgpr)")
@@ -86,7 +86,8 @@ all_features_collection_raw = gp_features.GP_Feature_Collection(
 
 if redo_pretraining:
     st = data_utils.make_datetime("27.07.2010 17:06") #TODO wrong
-    pretraining_result = pretrain_gp_ucp(all_features_collection_raw, start_time=st, end_time=start_time_online_learning)
+    pretraining_result = pretrain_gp_ucp(all_features_collection_raw, all_events_pretraining_dataframe, hour_threshold_suggested_answer, cached_data, only_open_questions_suggestable,
+                                        filter_nan_asker_id, start_time=st, end_time=start_time_online_learning)
     with open(pretraining_cache_file, "wb") as f:
         pickle.dump(pretraining_result, f)
 else:
@@ -129,7 +130,7 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
     assert(not np.isnan(event.answerer_user_id))
     assert(not np.isnan(event.asker_user_id))
 
-    if not is_user_answers_suggested_event(event):
+    if not is_user_answers_suggested_event(event, hour_threshold_suggested_answer):
         # Don't just update the coupe, also add to the df as observation
         all_features_collection.update_pos_event(event)
         # TODO: add to what_algo_observed
@@ -138,7 +139,7 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         actually_answered_id = event.question_id
         event_time = event.answer_date
 
-        suggestable_questions = get_suggestable_questions(event.answer_date)
+        suggestable_questions = get_suggestable_questions(event.answer_date, cached_data, only_open_questions_suggestable, hour_threshold_suggested_answer, filter_nan_asker)
         if len(suggestable_questions) ==0:
             warnings.warn("For answer id {} (to question {}) there was not a single suggestable question".format(event.answer_id, event.question_id))
             continue
@@ -198,7 +199,7 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
 
         # print("mu", mu)
         # print("sigma", sigma)
-        max_inds = top_N_ucb(mu, sigma) # this is the indexes of the predicted question that the user will answer
+        max_inds = top_N_ucb(mu, sigma, beta, n_preds) # this is the indexes of the predicted question that the user will answer
         # print("finished GP")
         # print("maximal indices", max_inds)
 
@@ -267,7 +268,7 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
             print('mu', mu)
             print('sigma', sigma)
             print('label', suggested_questions_label)
-            print_intermediate_info(info_dict, event.answer_date)
+            print_intermediate_info(info_dict, event.answer_date, n_preds)
 
     if i % 1000 == 0 and i>100:
         if len(debug_all_questions_used_by_gp) != 0:
