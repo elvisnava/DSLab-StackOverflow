@@ -10,6 +10,8 @@ import warnings
 import pickle
 import scipy
 import argparse
+import os
+import time
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct
@@ -22,6 +24,9 @@ parser.add_argument("--model", dest="model_choice", default="osgpr", metavar="mo
                     help="Choose model from: osgpr, sklearn-GP")
 parser.add_argument("-m", dest="m", default=100, metavar="M",
                     help="Number of pseudo-points (for osgpr)")
+parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
+parser.add_argument("--save_every_n", default=1000, type=int)
+parser.add_argument("--redo_pretraining", action='store_true')
 
 args = parser.parse_args()
 
@@ -58,11 +63,17 @@ save_n_negative_suggestons = 1
 always_update_features = True
 
 pretraining_cache_file = "../cache/gp/pretraining.pickle"
-redo_pretraining = False
+redo_pretraining = args.redo_pretraining
 
 all_events_file = "../cache/gp/all_events.pickle"
 cached_data_file = "../cache/gp/cached_data.pickle"
 redo_database_dumps = False
+
+
+if not os.path.exists(args.sum_file_path):
+    os.makedirs(args.sum_file_path)
+time_string = time.strftime("%m_%d__%H_%M")
+summary_file_path = os.path.join(args.sum_file_path, "run_summary_{}.pickle".format(time_string))
 
 if redo_database_dumps:
     all_events_dataframe = data_utils.all_answer_events_dataframe(start_time=None, end_time=None, time_delta_scores_after_post=time_delta_scores_after_posts, filter_empty_asker=filter_nan_asker, filter_empty_target_user=filter_nan_answerer)
@@ -89,9 +100,8 @@ all_features_collection_raw = gp_features.GP_Feature_Collection(
     gp_features.GP_Features_user())
 
 if redo_pretraining:
-    st = data_utils.make_datetime("27.07.2010 17:06") #TODO wrong
     pretraining_result = pretrain_gp_ucp(all_features_collection_raw, all_events_pretraining_dataframe, hour_threshold_suggested_answer, cached_data, only_open_questions_suggestable,
-                                        filter_nan_asker_id, start_time=st, end_time=start_time_online_learning)
+                                        filter_nan_asker)
     with open(pretraining_cache_file, "wb") as f:
         pickle.dump(pretraining_result, f)
 else:
@@ -103,11 +113,11 @@ all_features_collection, (training_set_for_gp, observed_labels) = pretraining_re
 if model_choice == "osgpr":
     #Turn it into an array of 0 and 1s
     observed_labels = np.array([1.0 if i else 0.0 for i in observed_labels])[:, np.newaxis]
+
 n_pretraining_samples = len(training_set_for_gp)
 print("{} pretraining examples".format(n_pretraining_samples))
 print(training_set_for_gp.shape)
 # print(observed_labels.shape)
-
 
 #With osgpr we pretrain immediately
 if model_choice == "osgpr":
@@ -274,12 +284,23 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
             print('label', suggested_questions_label)
             print_intermediate_info(info_dict, event.answer_date, n_preds)
 
-    if i % 1000 == 0 and i>100:
-        if len(debug_all_questions_used_by_gp) != 0:
-            debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
-            assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
-            debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
-            debug_used_questions.to_csv("events_used_by_gp.csv")
-            training_set_for_gp.to_csv("training_set_for_gp.csv")
-            gp_info_dict = pd.DataFrame(data = info_dict)
-            gp_info_dict.to_csv("gp_run_info_dict_{}.csv".format(model_choice))
+    if i % args.save_every_n == 0 and i>10:
+        debug_used_questions=pd.concat(debug_all_questions_used_by_gp, axis=0)
+        assert(len(debug_used_questions) == len(training_set_for_gp[n_pretraining_samples:]))
+        debug_used_questions.loc[:, "label"] = observed_labels[n_pretraining_samples:]
+        gp_info_dict = pd.DataFrame(data = info_dict)
+        params_dict = vars(args)
+
+        data_to_save_dict = {
+            "used_questions": debug_used_questions,
+            "training_set_for_gp": training_set_for_gp,
+            "gp_run_info": gp_info_dict,
+            "params": params_dict
+        }
+
+        with open(summary_file_path, "wb") as f:
+            pickle.dump(data_to_save_dict, f)
+
+        # debug_used_questions.to_csv("events_used_by_gp.csv")
+        # training_set_for_gp.to_csv("training_set_for_gp.csv")
+        # gp_info_dict.to_csv("gp_run_info_dict_{}.csv".format(model_choice))

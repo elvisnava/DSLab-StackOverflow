@@ -64,7 +64,7 @@ def top_N_ucb(mu, sigma, beta, n):
     return sorted_ids # first is actually the one with the highest prediction
 
 def pretrain_gp_ucp(feature_collection, all_events_pretraining_dataframe, hour_threshold_suggested_answer, cached_data, only_open_questions_suggestable,
-                    filter_nan_asker_id, start_time, end_time):
+                    filter_nan_asker_id):
 
     all_feates_collector = list()
     all_label_collector = list() # list of 1d numpy arrays
