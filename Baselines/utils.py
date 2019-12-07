@@ -65,9 +65,26 @@ def multi_mrr(out_probs, grouped_queries, ground_truth):
     mrr_final = summed_score/len(group_ids)
     return mrr_final, rank_list
 
-def success_at_n(out_probs, grouped_query, ground_truth):
-    pass
-
+def success_at_n(out_probs, grouped_queries, ground_truth, n=5):
+    assert(len(out_probs)==len(ground_truth))
+    assert(len(out_probs)==len(grouped_queries))
+    
+    success = list()
+    group_ids = np.unique(grouped_queries)
+    for q in np.unique(grouped_queries):
+        # select the current block (one user-(answer+openquestions) pair)
+        gt_group = ground_truth[grouped_queries==q]
+        # find index of the gt answer in group g (the one with label 1)
+        gt_label = np.nonzero(gt_group)[0]
+        assert(len(gt_label)==1)
+        gt_label = gt_label[0]
+        # select predictions for current group
+        out_group = out_probs[grouped_queries==q]
+        # compute the ranks for the group (len(out_group) necessary for ascending)
+        ranks = len(out_group)+1 - rankdata(out_group).astype(int)
+        rank = ranks[gt_label] # get predicted rank of ground truth
+        success.append(int(rank <= n))
+    return np.mean(success)
 
 
 def shuffle_3(X,Y,G):
