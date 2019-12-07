@@ -27,6 +27,7 @@ parser.add_argument("-m", dest="m", default=100, metavar="M",
 parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
 parser.add_argument("--save_every_n", default=1000, type=int)
 parser.add_argument("--redo_pretraining", action='store_true')
+parser.add_argument("--cache_file_path", default="../cache")
 
 args = parser.parse_args()
 
@@ -62,11 +63,11 @@ save_n_negative_suggestons = 1
 #(less divergent simulation)
 always_update_features = True
 
-pretraining_cache_file = "../cache/gp/pretraining.pickle"
+pretraining_cache_file = os.path.join(args.cache_file_path, "/gp/pretraining.pickle")
 redo_pretraining = args.redo_pretraining
 
-all_events_file = "../cache/gp/all_events.pickle"
-cached_data_file = "../cache/gp/cached_data.pickle"
+all_events_file = os.path.join(args.cache_file_path, "/gp/all_events.pickle")
+cached_data_file = os.path.join(args.ache_file_path, "/gp/cached_data.pickle")
 redo_database_dumps = False
 
 
