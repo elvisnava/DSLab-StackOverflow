@@ -67,7 +67,7 @@ pretraining_cache_file = os.path.join(args.cache_file_path, "/gp/pretraining.pic
 redo_pretraining = args.redo_pretraining
 
 all_events_file = os.path.join(args.cache_file_path, "/gp/all_events.pickle")
-cached_data_file = os.path.join(args.ache_file_path, "/gp/cached_data.pickle")
+cached_data_file = os.path.join(args.cache_file_path, "/gp/cached_data.pickle")
 redo_database_dumps = False
 
 
