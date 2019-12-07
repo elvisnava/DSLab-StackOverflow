@@ -63,11 +63,12 @@ save_n_negative_suggestons = 1
 #(less divergent simulation)
 always_update_features = True
 
-pretraining_cache_file = os.path.join(args.cache_file_path, "/gp/pretraining.pickle")
+pretraining_cache_file = os.path.join(args.cache_file_path, "gp/pretraining.pickle")
 redo_pretraining = args.redo_pretraining
 
-all_events_file = os.path.join(args.cache_file_path, "/gp/all_events.pickle")
-cached_data_file = os.path.join(args.ache_file_path, "/gp/cached_data.pickle")
+all_events_file = os.path.join(args.cache_file_path, "gp/all_events.pickle")
+cached_data_file = os.path.join(args.cache_file_path, "gp/cached_data.pickle")
+print(all_events_file)
 redo_database_dumps = False
 
 

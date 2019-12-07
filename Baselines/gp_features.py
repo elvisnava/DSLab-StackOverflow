@@ -15,7 +15,15 @@ pd.set_option('mode.chained_assignment', 'raise')
 
 import custom_lda
 
-cache_dir = "../cache/"
+_env = os.getenv("CACHEDIR")
+if _env is not None:
+    cache_dir = _env
+else:
+    cache_dir = "../cache/"
+
+print("Cachedir gp_features>> {}".format(cache_dir))
+
+
 raw_question_features_path = os.path.join(cache_dir, "ttm_elvis_raw_question_features.pickle")
 
 class GP_Feature_Collection:
