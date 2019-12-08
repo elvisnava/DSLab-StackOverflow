@@ -100,9 +100,13 @@ class GP_Features_user(GP_Features):
         # answerer features
         answerer_feats = [event.answer_date, 1,1,0,event.answer_score, 0] # , is_acc_ans, 0]
         self.user_features[event.answerer_user_id].append(answerer_feats)
-        # asker features
-        asker_feats = [event.question_date,1,0,1,0,event.question_score] # , 0, has_acc_ans]
-        self.user_features[event.asker_user_id].append(asker_feats)
+        # asker features: 
+        # questions can appear several times, so first check if question in dict already
+        ans_dates = [feat_vec[0] for feat_vec in self.user_features[event.asker_user_id]]
+        same_date = [q_time==event.question_date for q_time in ans_dates]
+        if not any(same_date):
+            asker_feats = [event.question_date,1,0,1,0,event.question_score] # , 0, has_acc_ans]
+            self.user_features[event.asker_user_id].append(asker_feats)
 
     def compute_features(self, user_id, questions, event_time=None):
         # filter the answerer features

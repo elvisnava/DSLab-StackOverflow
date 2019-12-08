@@ -22,8 +22,22 @@ from gp_utils import *
 parser = argparse.ArgumentParser(description="Runs the online GP")
 parser.add_argument("--model", dest="model_choice", default="osgpr", metavar="model_name",
                     help="Choose model from: osgpr, sklearn-GP")
-parser.add_argument("-m", dest="m", default=100, metavar="M",
+parser.add_argument("-m", dest="m", default=100, type=int, metavar="M",
                     help="Number of pseudo-points (for osgpr)")
+parser.add_argument("--kernel", dest="kernel", default="linear", metavar="kernel_name",
+                    help="Choose kernel from: linear, rbf")
+parser.add_argument("--init_kern_var", dest="k_var", default=1.0, metavar="variance",
+                    help="Initial kernel variance")
+parser.add_argument("--init_kern_lenght", dest="k_len", default=0.8, metavar="lengthscales",
+                    help="Initial kernel lengthscale (for rbf)")
+parser.add_argument("--pretrain_steps", dest="pretrain_steps", default=50, type=int, metavar="n_p_steps",
+                    help="Number of optimization steps during pretraining")
+parser.add_argument("--opt_steps", dest="opt_steps", default=20, type=int, metavar="n_steps",
+                    help="Number of optimization steps in every main loop iteration")
+parser.add_argument("--verbose_opt", dest="verbose_opt", default="pretraining",
+                    help="Level of optimization verbosity: choose between 'pretraining', 'all', 'none'")
+parser.add_argument("--save_n_neg", dest="save_n_neg", default=1, type=int, metavar="N",
+                    help="How many negative examples to save as training data for the next step (1 to 5)")
 parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
 parser.add_argument("--save_every_n", default=1000, type=int)
 parser.add_argument("--redo_pretraining", action='store_true')
@@ -57,7 +71,7 @@ filter_nan_answerer = True # i.e. skip events where asker or answerer field is e
 
 only_open_questions_suggestable = False # if True candidate questions only contain questions which have no accepted answer at event time -> some people answer questions that already have an accepted answer
 
-save_n_negative_suggestons = 1
+save_n_negative_suggestons = args.save_n_neg
 
 #Set to true if I always want to update the features "correctly" despite the suggestions
 #(less divergent simulation)
@@ -126,14 +140,21 @@ if model_choice == "osgpr":
     persistent_scaler = StandardScaler()
     gp_input = persistent_scaler.fit_transform(training_set_for_gp)
     Z1 = gp_input[np.random.permutation(gp_input.shape[0])[0:M_points], :]
-    #model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.RBF(gp_input.shape[1], ARD=True), Z=Z1)
-    #model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.Linear(gp_input.shape[1], ARD=True), Z=Z1)
-    model = GPflow.sgpr.SGPR(gp_input, observed_labels, osgpr_utils.CustLinearKernel(gp_input.shape[1], alpha=1e-5, ARD=True), Z=Z1)
+    if args.kernel == "linear":
+        model = GPflow.sgpr.SGPR(gp_input, observed_labels, osgpr_utils.CustLinearKernel(gp_input.shape[1], alpha=1e-5, ARD=True), Z=Z1)
+        model.kern.variance = np.ones(gp_input.shape[1]) * args.k_var
+    elif args.kernel == "rbf":
+        model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.RBF(gp_input.shape[1], ARD=True), Z=Z1)
+        model.kern.variance = args.k_var
+        model.kern.lengthscales = np.ones(gp_input.shape[1]) * args.k_len
+    else:
+        raise ValueError("Chosen kernel is not implemented")
     model.likelihood.variance = 0.001
-    #model.kern.variance = 1.0
-    model.kern.variance = np.ones(gp_input.shape[1])
-    #model.kern.lengthscales = np.ones(gp_input.shape[1]) * 0.8
-    model.optimize(disp=1, maxiter=50)
+    if args.verbose_opt in ['pretraining', 'all']:
+        verb_disp = 1
+    else:
+        verb_disp = 0
+    model.optimize(disp=verb_disp, maxiter=args.pretrain_steps)
     #model.optimize(method=tf.train.AdamOptimizer(), maxiter=100)
 
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
@@ -179,7 +200,8 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         elif model_choice == "osgpr":
             #If we added new points, do an online update
 
-            print("n_new_points right before condition: {}".format(n_new_points))
+            if args.verbose_opt == 'all':
+                print("n_new_points right before condition: {}".format(n_new_points))
             if n_new_points > 0:
                 new_gp_input = persistent_scaler.transform(training_set_for_gp[-n_new_points:])
                 new_observed_labels = observed_labels[-n_new_points:]
@@ -197,14 +219,21 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
                 Zinit = osgpr_utils.init_Z(Zopt, new_gp_input, use_old_Z=False)
 
                 tf.reset_default_graph()
-                #new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
-                #new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.Linear(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
-                new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, osgpr_utils.CustLinearKernel(new_gp_input.shape[1], alpha=1e-5, ARD=True), mu, Su, Kaa, Zopt, Zinit)
+                if args.kernel == "linear":
+                    new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, osgpr_utils.CustLinearKernel(new_gp_input.shape[1], alpha=1e-5, ARD=True), mu, Su, Kaa, Zopt, Zinit)
+                    new_model.kern.variance = model.kern.variance.value
+                elif args.kernel == "rbf":
+                    new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.RBF(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
+                    new_model.kern.variance = model.kern.variance.value
+                    new_model.kern.lengthscales = model.kern.lengthscales.value
+
                 new_model.likelihood.variance = model.likelihood.variance.value
-                new_model.kern.variance = model.kern.variance.value
-                #new_model.kern.lengthscales = model.kern.lengthscales.value
                 model = new_model
-                model.optimize(disp=1, maxiter=30)
+                if args.verbose_opt == 'all':
+                    verb_disp = 1
+                else:
+                    verb_disp = 0
+                model.optimize(disp=verb_disp, maxiter=args.opt_steps)
                 #model.optimize(method=tf.train.AdamOptimizer(), maxiter=100)
 
             mu, var = model.predict_f(features)
