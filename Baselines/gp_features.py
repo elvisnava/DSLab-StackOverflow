@@ -29,6 +29,7 @@ raw_question_features_path = os.path.join(cache_dir, "ttm_elvis_raw_question_fea
 class GP_Feature_Collection:
 
     def __init__(self, *args):
+
         self.features = args
 
     def update_event(self, event, user_answered, question_was_suggested):
@@ -46,7 +47,11 @@ class GP_Feature_Collection:
     def compute_features(self, user_id, questions, event_time=None):
         sub_features = [f.compute_features(user_id, questions, event_time) for f in self.features]
 
-        return pd.concat(sub_features, axis=1) # np.concatenate(sub_features, axis = 1)
+        all_features_mat = pd.concat(sub_features, axis=1) # np.concatenate(sub_features, axis = 1)
+
+        return all_features_mat
+
+
 
 class GP_Features:
 

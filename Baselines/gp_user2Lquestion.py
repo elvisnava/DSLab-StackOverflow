@@ -38,10 +38,15 @@ parser.add_argument("--verbose_opt", dest="verbose_opt", default="pretraining",
                     help="Level of optimization verbosity: choose between 'pretraining', 'all', 'none'")
 parser.add_argument("--save_n_neg", dest="save_n_neg", default=1, type=int, metavar="N",
                     help="How many negative examples to save as training data for the next step (1 to 5)")
+parser.add_argument("--only_use_features", default=None, type=str,
+                    help="Pass a quoted string with feature names (as in the dataframes returned by the gp feature set) seperated by spaces. Only these features will then be used.")
+# e.g. --only_use_features "votes_sd affinity_sum tag_popularity votes_mean question_age"
+
 parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
 parser.add_argument("--save_every_n", default=1000, type=int)
 parser.add_argument("--redo_pretraining", action='store_true')
 parser.add_argument("--cache_file_path", default="../cache")
+parser.add_argument("--log_mu_sigma", action='store_true', help="If true all mu and sigma outputs of the gp will be saved for all candidates")
 
 args = parser.parse_args()
 
@@ -113,7 +118,8 @@ all_features_collection_raw = gp_features.GP_Feature_Collection(
     gp_features.GP_Features_affinity(),
     gp_features.GP_Features_TTM(),
     gp_features.GP_Features_Question(),
-    gp_features.GP_Features_user())
+    gp_features.GP_Features_user()
+)
 
 if redo_pretraining:
     pretraining_result = pretrain_gp_ucp(all_features_collection_raw, all_events_pretraining_dataframe, hour_threshold_suggested_answer, cached_data, only_open_questions_suggestable,
@@ -125,7 +131,9 @@ else:
         pretraining_result = pickle.load(f)
 
 
-all_features_collection, (training_set_for_gp, observed_labels) = pretraining_result
+all_features_collection, (_raw_training_set_for_gp, observed_labels) = pretraining_result
+training_set_for_gp = filter_features(_raw_training_set_for_gp, args.only_use_features)
+
 if model_choice == "osgpr":
     #Turn it into an array of 0 and 1s
     observed_labels = np.array([1.0 if i else 0.0 for i in observed_labels])[:, np.newaxis]
@@ -160,10 +168,11 @@ if model_choice == "osgpr":
 info_dict = {'answer_id': list(), 'event_time': list(), 'user_id': list(), 'n_candidates': list(), 'predicted_rank': list()}
 
 debug_all_questions_used_by_gp =list()
+debug_all_mus = dict()
+debug_all_sigmas = dict()
 n_new_points = 0
 
 for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
-
     assert(not np.isnan(event.answerer_user_id))
     assert(not np.isnan(event.asker_user_id))
 
@@ -186,7 +195,11 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         assert(np.any(suggestable_questions.question_id == actually_answered_id))
 
         # compute features
-        features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
+        _raw_features = all_features_collection.compute_features(target_user_id, suggestable_questions, event_time)
+        features = filter_features(_raw_features, args.only_use_features)
+
+        assert(len(np.unique(features, axis=0))==len(features)) # all candidates are different
+
         # previous version: (I changed it because it is not necessary to give a list of target_user_id)
         # features = all_features_collection.compute_features(len(suggestable_questions)*[target_user_id], suggestable_questions, event_time)
 
@@ -242,6 +255,14 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         else:
             raise NotImplementedError("This model hasn't been implemented yet")
 
+
+        if args.log_mu_sigma:
+            assert(event_time not in debug_all_mus)
+            debug_all_mus[event_time] = mu
+            assert(event_time not in debug_all_sigmas)
+            debug_all_sigmas[event_time] = sigma
+
+
         # print("mu", mu)
         # print("sigma", sigma)
         max_inds = top_N_ucb(mu, sigma, beta, n_preds) # this is the indexes of the predicted question that the user will answer
@@ -282,8 +303,10 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
 
 
         # for debugging
-        debug_all_questions_used_by_gp.append(suggestable_questions.iloc[max_inds][data_to_use_mask])
-
+        _to_use_for_debugging = suggestable_questions.iloc[max_inds][data_to_use_mask]
+        _to_use_for_debugging['event_time'] = event_time
+        _to_use_for_debugging['target_user'] = target_user_id
+        debug_all_questions_used_by_gp.append(_to_use_for_debugging)
 
         assert(np.all(training_set_for_gp.columns == features.columns))
 
@@ -326,7 +349,9 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
             "used_questions": debug_used_questions,
             "training_set_for_gp": training_set_for_gp,
             "gp_run_info": gp_info_dict,
-            "params": params_dict
+            "params": params_dict,
+            "all_mus": debug_all_mus,
+            "all_sigmas": debug_all_sigmas
         }
 
         with open(summary_file_path, "wb") as f:

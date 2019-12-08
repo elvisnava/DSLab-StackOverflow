@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import warnings
 from datetime import timedelta
 
 def is_user_answers_suggested_event(event, hour_threshold_suggested_answer):
@@ -25,6 +26,13 @@ def optimising_dummy_func(obj_func, initial_theta, bounds):
 
 def argmax_ucb(mu, sigma, beta):
     return np.argmax(mu + sigma * np.sqrt(beta))
+
+def filter_features(feats, selection_string):
+    if selection_string is None:
+        return feats
+    else:
+        cols_to_take = selection_string.split(" ")
+        return feats[cols_to_take]
 
 def mrr_gp(ranks):
     inv = 1/ranks
