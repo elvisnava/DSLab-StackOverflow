@@ -54,6 +54,9 @@ n_feature_time_bins = 50
 n_candidate_questions = 30
 votes_threshold_for_answerers = 3
 
+features_for_sim_type = "pdf" # topic vec
+sim_only_in_prevalent_topic = False
+
 lda_type= "ttm_elvis"
 
 cache_dir = "../cache/"
@@ -187,11 +190,28 @@ print("finished question features")
 if load_final_pairs:
     all_pairs = pd.read_pickle(all_pairs_path)
 else:
-    features_cols_for_similarity = ["titleLength", "questionLength", "nCodeBlocks", "nEquationBlocks", "nExternalLinks", "nTags", "readability"]
+
+    if features_for_sim_type == "classic":
+        features_cols_for_similarity = ["titleLength", "questionLength", "nCodeBlocks", "nEquationBlocks", "nExternalLinks", "nTags", "readability"]
+        metric = 'cosine'
+
+    elif features_for_sim_type == "pdf":
+        features_cols_for_similarity = ["topic_{}".format(i) for i in range(10)]
+        metric = 'jensenshannon'
+    else:
+        raise NotImplementedError()
+
+
+    if sim_only_in_prevalent_topic:
+        group_column_name = 'prevalent_topic'
+    else:
+        group_column_name = None
+
+
     all_pairs = make_pairs(all_questions_features, question_features_to_use_for_similarity=features_cols_for_similarity,
                            question_start_time=training_questions_start_time,
-                           group_column_name='prevalent_topic', answerers_strategy=GetAnswerersStrategy(votes_threshold=votes_threshold_for_answerers, verbose=0),
-                           n_candidate_questions=n_candidate_questions, user_features=binned_user_features)
+                           group_column_name=group_column_name, answerers_strategy=GetAnswerersStrategy(votes_threshold=votes_threshold_for_answerers, verbose=0),
+                           n_candidate_questions=n_candidate_questions, user_features=binned_user_features, similarity_measure=metric)
 
     pd.to_pickle(all_pairs, all_pairs_path)
 

@@ -39,10 +39,11 @@ def get_user_data(db_access):
 def make_pairs(question_stream, # dataframe with all questions (including testing)
                question_features_to_use_for_similarity, # name of columns to use for similarity
                question_start_time, # question
-               group_column_name, # name of in this case topic column
+               group_column_name, # name of (in this case) prevalent topic column || None -> find similar context question among all questions
                answerers_strategy,
                n_candidate_questions,
-               user_features #  a Time_Binned_Features instance
+               user_features, #  a Time_Binned_Features instance
+               similarity_measure = "cosine"
                ):
     stats = dict(ignored_questions = 0, used_questions = 0, manually_added_users_unkown_at_last_intervall=0)
     print("Starting make pairs")
@@ -74,13 +75,17 @@ def make_pairs(question_stream, # dataframe with all questions (including testin
 
         assert(current_target_question.question_id not in list(context_questions.question_id))
 
-        target_group_id = current_target_question[group_column_name]
-        context_questions_in_group = context_questions[context_questions[group_column_name] == target_group_id]
+
+        if group_column_name is not None:
+            target_group_id = current_target_question[group_column_name]
+            context_questions_in_group = context_questions[context_questions[group_column_name] == target_group_id]
+        else:
+            context_questions_in_group = context_questions
 
         target_question_featues = np.array(current_target_question[question_features_to_use_for_similarity].values)[None, :]
         # TODO at the mmoment we take all similar questions (i.e. also unanswered ones)
         context_questions_features = context_questions_in_group[question_features_to_use_for_similarity].values
-        closest_ids = np.squeeze(utils.get_closest_n(source_features=target_question_featues, context_features=context_questions_features, n=n_candidate_questions))
+        closest_ids = np.squeeze(utils.get_closest_n(source_features=target_question_featues, context_features=context_questions_features, n=n_candidate_questions, metric=similarity_measure))
 
         selected_context_questions = context_questions_in_group.iloc[closest_ids]
 
