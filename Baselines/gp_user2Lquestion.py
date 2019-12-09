@@ -14,7 +14,7 @@ import os
 import time
 
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import DotProduct
+from sklearn.gaussian_process.kernels import DotProduct, RBF, Matern, WhiteKernel
 from sklearn.preprocessing import normalize, StandardScaler
 
 from gp_utils import *
@@ -93,7 +93,7 @@ redo_database_dumps = False
 
 if not os.path.exists(args.sum_file_path):
     os.makedirs(args.sum_file_path)
-time_string = time.strftime("%m_%d__%H_%M")
+time_string = time.strftime("%m_%d__%H_%M_%S")
 summary_file_path = os.path.join(args.sum_file_path, "run_summary_{}.pickle".format(time_string))
 
 if redo_database_dumps:
@@ -208,7 +208,11 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         if model_choice == "sklearn-GP":
             # print("starting GP")
             gp_input = StandardScaler().fit_transform(training_set_for_gp[-1000:])
-            gpr = GaussianProcessRegressor(kernel=DotProduct(sigma_0=1.0), random_state=0, alpha=1e-5, normalize_y=False).fit(gp_input, observed_labels[-1000:])
+
+            # kernel_to_use = DotProduct(sigma_0=1.0)
+            # kernel_to_use = RBF()
+            kernel_to_use = RBF() + WhiteKernel()
+            gpr = GaussianProcessRegressor(kernel=kernel_to_use, random_state=0, alpha=1e-8, normalize_y=False, n_restarts_optimizer=0).fit(gp_input, observed_labels[-1000:])
             mu, sigma = gpr.predict(features, return_std=True)
         elif model_choice == "osgpr":
             #If we added new points, do an online update
