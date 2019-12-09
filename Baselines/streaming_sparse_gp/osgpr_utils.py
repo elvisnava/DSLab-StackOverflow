@@ -68,6 +68,29 @@ class CustLinearKernel(GPflow.kernels.Kern):
             X, _ = self._slice(X, None)
         return tf.reduce_sum((tf.square(X) * self.variance) + self.alpha, 1)
 
+class CustRBF(GPflow.kernels.RBF):
+    """
+    The radial basis function (RBF) or squared exponential kernel
+    modified with added alpha in the diag
+    """
+    def __init__(self, input_dim, variance=1.0, lengthscales=None, alpha=0.0, active_dims=None, ARD=False):
+        GPflow.kernels.RBF.__init__(self, input_dim, variance, lengthscales, active_dims, ARD)
+        self.alpha = tf.constant(np.array(alpha, dtype='float64'))
+
+    def white_noise_K(self, X, X2=None, presliced=False):
+        if X2 is None:
+            d = tf.fill(tf.stack([tf.shape(X)[0]]), tf.squeeze(self.alpha))
+            return tf.matrix_diag(d)
+        else:
+            shape = tf.stack([tf.shape(X)[0], tf.shape(X2)[0]])
+            return tf.zeros(shape, tf.float64)
+
+    def K(self, X, X2=None, presliced=False):
+        return GPflow.kernels.RBF.K(self, X, X2, presliced) + self.white_noise_K(X, X2, presliced)
+
+    def Kdiag(self, X, presliced=False):
+        return tf.fill(tf.stack([tf.shape(X)[0]]), tf.squeeze(self.variance + self.alpha))
+
 
 #Function for the original sklearn GP, in order to monitor ("disp"lay) the optimizer:
 def disp_optimizer(obj_func, initial_theta, bounds):
