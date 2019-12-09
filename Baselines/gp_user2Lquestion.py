@@ -212,12 +212,12 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
         # # fit and predict with gaussian process
         if model_choice == "sklearn-GP":
             # print("starting GP")
-            gp_input = StandardScaler().fit_transform(training_set_for_gp[-1000:])
+            gp_input = StandardScaler().fit_transform(training_set_for_gp[-2000:])
 
             # kernel_to_use = DotProduct(sigma_0=1.0)
             # kernel_to_use = RBF()
             kernel_to_use = RBF() + WhiteKernel()
-            gpr = GaussianProcessRegressor(kernel=kernel_to_use, random_state=0, alpha=1e-8, normalize_y=False, n_restarts_optimizer=0).fit(gp_input, observed_labels[-1000:])
+            gpr = GaussianProcessRegressor(kernel=kernel_to_use, random_state=0, alpha=1e-8, normalize_y=False, n_restarts_optimizer=0).fit(gp_input, observed_labels[-2000:])
             mu, sigma = gpr.predict(features, return_std=True)
         elif model_choice == "osgpr":
             #If we added new points, do an online update
