@@ -155,6 +155,11 @@ if model_choice == "osgpr":
         model = GPflow.sgpr.SGPR(gp_input, observed_labels, osgpr_utils.CustRBF(gp_input.shape[1], ARD=True), Z=Z1)
         model.kern.variance = float(args.k_var)
         model.kern.lengthscales = np.ones(gp_input.shape[1]) * float(args.k_len)
+    elif args.kernel == "rbf_white":
+        model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.Add([GPflow.kernels.RBF(gp_input.shape[1], ARD=True), GPflow.kernels.White(gp_input.shape[1])]), Z=Z1)
+        model.kern.kern_list[0].variance = float(args.k_var)
+        model.kern.kern_list[0].lengthscales = np.ones(gp_input.shape[1]) * float(args.k_len)
+        model.kern.kern_list[1].variace = 1.0
     else:
         raise ValueError("Chosen kernel is not implemented")
     model.likelihood.variance = 0.001
@@ -237,10 +242,13 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
                     new_model.kern.variance = model.kern.variance.value
                 elif args.kernel == "rbf":
                     new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, osgpr_utils.CustRBF(new_gp_input.shape[1], ARD=True), mu, Su, Kaa, Zopt, Zinit)
-                    print(model.kern.variance.value)
-                    print(model.kern.lengthscales.value)
                     new_model.kern.variance = model.kern.variance.value
                     new_model.kern.lengthscales = model.kern.lengthscales.value
+                elif args.kernel == "rbf_white":
+                    new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.Add([GPflow.kernels.RBF(gp_input.shape[1], ARD=True), GPflow.kernels.White(gp_input.shape[1])]), mu, Su, Kaa, Zopt, Zinit)
+                    new_model.kern.kern_list[0].variance = model.kern.kern_list[0].variance.value
+                    new_model.kern.kern_list[0].lengthscales = model.kern.kern_list[0].lengthscales.value
+                    new_model.kern.kern_list[1].variance = model.kern.kern_list[1].variance.value
 
                 new_model.likelihood.variance = model.likelihood.variance.value
                 model = new_model
