@@ -15,7 +15,7 @@ import time
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct, RBF, Matern, WhiteKernel
-from sklearn.preprocessing import normalize, StandardScaler
+from sklearn.preprocessing import normalize, StandardScaler, MinMaxScaler
 
 from gp_utils import *
 
@@ -43,6 +43,7 @@ parser.add_argument("--only_use_features", default=None, type=str,
 # e.g. --only_use_features "votes_sd affinity_sum tag_popularity votes_mean question_age"
 parser.add_argument("--beta", default=0.4, type=float, metavar="b",
                     help="beta parameter for exploration (0=no exploration)")
+parser.add_argument("--scalar", default="standard", help="minmax or standard (for normalization)")
 
 parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
 parser.add_argument("--save_every_n", default=1000, type=int)
@@ -147,7 +148,10 @@ print(training_set_for_gp.shape)
 
 #With osgpr we pretrain immediately
 if model_choice == "osgpr":
-    persistent_scaler = StandardScaler()
+    if args.scalar=="minmax":
+        persistent_scaler = MinMaxScaler()
+    else:
+        persistent_scaler = StandardScaler()
     gp_input = persistent_scaler.fit_transform(training_set_for_gp)
     Z1 = gp_input[np.random.permutation(gp_input.shape[0])[0:M_points], :]
     if args.kernel == "linear":
