@@ -49,6 +49,7 @@ parser.add_argument("--save_every_n", default=1000, type=int)
 parser.add_argument("--redo_pretraining", action='store_true')
 parser.add_argument("--cache_file_path", default="../cache")
 parser.add_argument("--log_mu_sigma", action='store_true', help="If true all mu and sigma outputs of the gp will be saved for all candidates")
+parser.add_argument("--only_pretraining", action="store_true")
 
 args = parser.parse_args()
 
@@ -162,6 +163,11 @@ if model_choice == "osgpr":
         model.kern.kern_list[0].variance = float(args.k_var)
         model.kern.kern_list[0].lengthscales = np.ones(gp_input.shape[1]) * float(args.k_len)
         model.kern.kern_list[1].variace = 1.0
+    elif args.kernel == "matern12":
+        model = GPflow.sgpr.SGPR(gp_input, observed_labels, GPflow.kernels.Add([GPflow.kernels.Matern12(gp_input.shape[1], ARD=True), GPflow.kernels.White(gp_input.shape[1])]), Z=Z1)
+        model.kern.kern_list[0].variance = float(args.k_var)
+        model.kern.kern_list[0].lengthscales = np.ones(gp_input.shape[1]) * float(args.k_len)
+        model.kern.kern_list[1].variace = 1e-5
     else:
         raise ValueError("Chosen kernel is not implemented")
     model.likelihood.variance = 0.001
@@ -226,7 +232,7 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
 
             if args.verbose_opt == 'all':
                 print("n_new_points right before condition: {}".format(n_new_points))
-            if n_new_points > 0:
+            if n_new_points > 0 and not args.only_pretraining:
                 new_gp_input = persistent_scaler.transform(training_set_for_gp[-n_new_points:])
                 new_observed_labels = observed_labels[-n_new_points:]
 
@@ -252,6 +258,11 @@ for i, (_rowname, event) in enumerate(all_events_main_timewindow.iterrows()):
                     new_model.kern.lengthscales = model.kern.lengthscales.value
                 elif args.kernel == "rbf_white":
                     new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.Add([GPflow.kernels.RBF(gp_input.shape[1], ARD=True), GPflow.kernels.White(gp_input.shape[1])]), mu, Su, Kaa, Zopt, Zinit)
+                    new_model.kern.kern_list[0].variance = model.kern.kern_list[0].variance.value
+                    new_model.kern.kern_list[0].lengthscales = model.kern.kern_list[0].lengthscales.value
+                    new_model.kern.kern_list[1].variance = model.kern.kern_list[1].variance.value
+                elif args.kernel == "matern12":
+                    new_model = osgpr.OSGPR_VFE(new_gp_input, new_observed_labels, GPflow.kernels.Add([GPflow.kernels.Matern12(gp_input.shape[1], ARD=True), GPflow.kernels.White(gp_input.shape[1])]), mu, Su, Kaa, Zopt, Zinit)
                     new_model.kern.kern_list[0].variance = model.kern.kern_list[0].variance.value
                     new_model.kern.kern_list[0].lengthscales = model.kern.kern_list[0].lengthscales.value
                     new_model.kern.kern_list[1].variance = model.kern.kern_list[1].variance.value
