@@ -41,6 +41,8 @@ parser.add_argument("--save_n_neg", dest="save_n_neg", default=1, type=int, meta
 parser.add_argument("--only_use_features", default=None, type=str,
                     help="Pass a quoted string with feature names (as in the dataframes returned by the gp feature set) seperated by spaces. Only these features will then be used.")
 # e.g. --only_use_features "votes_sd affinity_sum tag_popularity votes_mean question_age"
+parser.add_argument("--beta", default=0.4, type=float, metavar="b",
+                    help="beta parameter for exploration (0=no exploration)")
 
 parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
 parser.add_argument("--save_every_n", default=1000, type=int)
@@ -64,7 +66,7 @@ if model_choice == "osgpr":
 start_time_online_learning =  data_utils.make_datetime("01.01.2015 00:01")
 hour_threshold_suggested_answer = 24
 sigma = 1
-beta = 0.4
+beta = args.beta
 n_preds = 5
 
 ## The following flags only take affect if you redo the all_events.pickle file. i.e. redo_database_dumps =True
