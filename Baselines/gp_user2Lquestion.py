@@ -43,7 +43,7 @@ parser.add_argument("--only_use_features", default=None, type=str,
 # e.g. --only_use_features "votes_sd affinity_sum tag_popularity votes_mean question_age"
 parser.add_argument("--beta", default=0.4, type=float, metavar="b",
                     help="beta parameter for exploration (0=no exploration)")
-parser.add_argument("--scalar", default="standard", help="minmax or standard (for normalization)")
+parser.add_argument("--scaler", default="standard", help="minmax or standard (for normalization)")
 
 parser.add_argument("--sum_file_path", default="../cache/gp/runs/")
 parser.add_argument("--save_every_n", default=1000, type=int)
@@ -149,7 +149,7 @@ print(training_set_for_gp.shape)
 
 #With osgpr we pretrain immediately
 if model_choice == "osgpr":
-    if args.scalar=="minmax":
+    if args.scaler=="minmax":
         persistent_scaler = MinMaxScaler()
     else:
         persistent_scaler = StandardScaler()
