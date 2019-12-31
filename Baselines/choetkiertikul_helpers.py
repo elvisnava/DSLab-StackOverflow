@@ -7,7 +7,7 @@ import time
 
 
 def get_user_data(db_access):
-    date_now =  db_access.end
+    date_now = db_access.end
 
     date_string = str(date_now)
 
@@ -135,7 +135,7 @@ def make_pairs(question_stream, # dataframe with all questions (including testin
 
     # get actuall answerer
 
-def overview_score(y_true, y_hat, group):
+def overview_score(y_true, y_hat, group, label=None):
     assert(y_hat.dtype==np.float)
     y_hat_bin = y_hat >=0.5
 
@@ -152,7 +152,7 @@ def overview_score(y_true, y_hat, group):
     mrr_score, mrr_ranks = utils.multi_mrr(out_probs=y_hat, grouped_queries=group, ground_truth=y_true)
     mrr_time = time.time() - t0
 
-    all_info = dict(accuracy=acc, precission = prec, recall = rec, fscore = fscore, prediction_values=hist, mrr_score = mrr_score, mrr_time=mrr_time)
+    all_info = dict(accuracy=acc, precission = prec, recall = rec, fscore = fscore, prediction_values=hist, mrr_score = mrr_score, mrr_time=mrr_time, label=label)
 
     return all_info, mrr_ranks
 

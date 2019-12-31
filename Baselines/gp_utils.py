@@ -84,7 +84,7 @@ def pretrain_gp_ucp(feature_collection, all_events_pretraining_dataframe, hour_t
         assert(not np.isnan(event.answerer_user_id))
         assert(not np.isnan(event.asker_user_id))
 
-        if i%100 ==0 :
+        if i%100 == 0 :
             avg_candidates = np.mean(n_candidates_collector)
             print("Preptraining at {}| on average {} candidates in the last {} suggested_question_events".format(event.answer_date, avg_candidates, len(n_candidates_collector)))
             n_candidates_collector = list()

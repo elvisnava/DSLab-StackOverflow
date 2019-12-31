@@ -343,6 +343,14 @@ class GetAnswerersStrategy:
 
     # answerer users for ids (sets)
     def __init__(self, votes_threshold=None, _db_access = None, verbose=0, with_score=False, accepted_only=True):
+        """
+
+        :param votes_threshold:
+        :param _db_access:
+        :param verbose:
+        :param with_score:
+        :param accepted_only: if FALSE all answers are returned, if TRUE only accepted answers or answers with a score above the specified threshold
+        """
         self.votes_threshold = votes_threshold
         self.with_score = with_score
         self.accepted_only = accepted_only
